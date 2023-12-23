@@ -12,9 +12,9 @@ func MetricsHandler(memStor *storage.Memory) http.HandlerFunc {
 		if r.Method == http.MethodPost {
 			fmt.Println("reqURL:", r.URL) //  "/update/counter/someMetric/527"
 
-			splitUrlMetrics := servutil.PrepareUrl(r.URL.String()) //  "[counter, someMetric, 527]" //0, 1, 2
+			splitURLMetrics := servutil.PrepareURL(r.URL.String()) //  "[counter, someMetric, 527]" //0, 1, 2
 
-			statusCode, responseMessage := servutil.ParseUrlMetrics(splitUrlMetrics, memStor)
+			statusCode, responseMessage := servutil.ParseURLMetrics(splitURLMetrics, memStor)
 
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(statusCode)

@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-func PrepareUrl(URL string) []string {
-	trimUrl := strings.Trim(URL, "/update") //  "counter/someMetric/527" //0, 1, 2
-	return strings.Split(trimUrl, "/")
+func PrepareURL(URL string) []string {
+	trimURL := strings.Trim(URL, "/update") //  "counter/someMetric/527" //0, 1, 2
+	return strings.Split(trimURL, "/")
 }
 
-func ParseUrlMetrics(reqMetrics []string, memStor *storage.Memory) (int, string) {
+func ParseURLMetrics(reqMetrics []string, memStor *storage.Memory) (int, string) {
 	if len(reqMetrics) != 3 {	//if len(reqMetrics) != 3 {
 		return http.StatusNotFound, "Not found!"
 	}

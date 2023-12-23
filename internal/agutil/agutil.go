@@ -86,9 +86,9 @@ func SendMetrics(wg *sync.WaitGroup, mu *sync.Mutex, metrics *storage.Metrics, r
 			}
 			resp.Body.Close()
 		}
-		fullCountUrl := fmt.Sprintf("%s/update/counter/PollCount/%d", URL, pollCount["PollCount"]) //"/update/counter/PollCount/25"
+		fullCountURL := fmt.Sprintf("%s/update/counter/PollCount/%d", URL, pollCount["PollCount"]) //"/update/counter/PollCount/25"
 		//fmt.Println(fullCountUrl)
-		resp, err := http.Post(fullCountUrl, "text/plain", nil)
+		resp, err := http.Post(fullCountURL, "text/plain", nil)
 		if err != nil {
 			fmt.Println(err)
 			continue
