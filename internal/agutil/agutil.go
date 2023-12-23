@@ -77,9 +77,9 @@ func SendMetrics(wg *sync.WaitGroup, mu *sync.Mutex, metrics *storage.Metrics, r
 
 		for key, value := range metricData {
 
-			fullGaugeUrl := fmt.Sprintf("%s/update/gauge/%s/%.2f", URL, key, value) //"/update/gauge/someMetric/5.27"
+			fullGaugeURL := fmt.Sprintf("%s/update/gauge/%s/%.2f", URL, key, value) //"/update/gauge/someMetric/5.27"
 			//fmt.Println(fullGaugeUrl)
-			resp, err := http.Post(fullGaugeUrl, "text/plain", nil)
+			resp, err := http.Post(fullGaugeURL, "text/plain", nil)
 			if err != nil {
 				fmt.Println(err)
 				continue
