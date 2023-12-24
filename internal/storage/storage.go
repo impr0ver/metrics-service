@@ -5,89 +5,86 @@ import (
 	"sync"
 )
 
-// Server storage
-type Memory struct {
-	Gauges   map[string]float64
-	Counters map[string]int64
+type Gauge float64
+type Counter int64
+
+type MemoryStorage struct {
+	sync.Mutex
+	Gauges   map[string]Gauge
+	Counters map[string]Counter
 }
 
-func InitMemory() Memory {
-	memory := Memory{Gauges: make(map[string]float64), Counters: make(map[string]int64)}
-	return memory
-}
 
 // CRUD DB operations analog in memory
 // create Memory interface{}
 type MemoryStorager interface {
-	AddCounter(source string, key string, countValue Counter)
-	GetGaugeByKey(source string, key string) (Gauge, error)
-	GetCounterByKey(source string, key string) (Counter, error)
-	UpdateGauge(source string, key string, gaugeValue Gauge)
+	AddNewCounter(key string, value Counter)
+	GetAllCounters() map[string]Counter
+	GetAllGauges() map[string]Gauge
+	GetCounterByKey(key string) (Counter, error)
+	GetGaugeByKey(key string) (Gauge, error)
+	UpdateGauge(key string, value Gauge)
 }
 
-type MemoryStorage struct {
-	sync.Mutex
-	MemoryMap map[string]Memory
+func (st *MemoryStorage) AddNewCounter(key string, counter Counter) {
+	st.Lock()
+	st.Counters[key] += counter
+	st.Unlock()
 }
 
-func (st *MemoryStorage) AddCounter(source string, key string, countValue Counter) {
+func (st *MemoryStorage) GetAllCounters() map[string]Counter {
 	st.Lock()
 	defer st.Unlock()
-	gp, ok := st.MemoryMap[source]
-	if !ok {
-		gp := InitMemory()
-		existValue := gp.Counters[key]
-		gp.Counters[key] = existValue + int64(countValue)
-		st.MemoryMap[source] = gp
-		return
+
+	res := make(map[string]Counter, len(st.Counters))
+	for k, v := range st.Counters {
+		res[k] = v
 	}
-	existValue := gp.Counters[key]
-	gp.Counters[key] = existValue + int64(countValue)
-	st.MemoryMap[source] = gp
+	return res
 }
 
-func (st *MemoryStorage) UpdateGauge(source string, key string, gaugeValue Gauge) {
+func (st *MemoryStorage) GetAllGauges() map[string]Gauge {
 	st.Lock()
 	defer st.Unlock()
-	gp, ok := st.MemoryMap[source]
-	if !ok {
-		gp := InitMemory()
-		gp.Gauges[key] = float64(gaugeValue)
-		st.MemoryMap[source] = gp
-		return
+
+	res := make(map[string]Gauge, len(st.Gauges))
+	for k, v := range st.Gauges {
+		res[k] = v
 	}
-	gp.Gauges[key] = float64(gaugeValue)
-	st.MemoryMap[source] = gp
+	return res
 }
 
-func (st *MemoryStorage) GetGaugeByKey(source string, key string) (Gauge, error) {
-	gp, ok := st.MemoryMap[source]
-	if !ok {
-		return Gauge(0), fmt.Errorf("source '%s' not found in the storage", source)
-	}
-	gauge, ok := gp.Gauges[key]
-	if !ok {
-		return Gauge(0), fmt.Errorf("gauge '%s' not found in the storage", key)
-	}
-	return Gauge(gauge), nil
-}
-
-func (st *MemoryStorage) GetCounterByKey(source string, key string) (Counter, error) {
-	gp, ok := st.MemoryMap[source]
-	if !ok {
-		return Counter(0), fmt.Errorf("source %s not found in the storage", source)
-	}
-	counter, ok := gp.Counters[key]
+func (st *MemoryStorage) GetCounterByKey(key string) (Counter, error) {
+	st.Lock()
+	counter, ok := st.Counters[key]
+	st.Unlock()
 	if !ok {
 		return Counter(0), fmt.Errorf("counter %s not found in the storage", key)
 	}
-	return Counter(counter), nil
+	return counter, nil
 }
+
+func (st *MemoryStorage) GetGaugeByKey(key string) (Gauge, error) {
+	st.Lock()
+	gauge, ok := st.Gauges[key]
+	st.Unlock()
+	if !ok {
+		return Gauge(0), fmt.Errorf("gauge %s not found in the storage", key)
+	}
+	return gauge, nil
+}
+
+func (st *MemoryStorage) UpdateGauge(key string, value Gauge) {
+	st.Lock()
+	defer st.Unlock()
+	st.Gauges[key] = value
+}
+
 
 // ////////////////////////////////
 // Agent storage
-type Gauge float64
-type Counter int64
+// type Gauge float64
+// type Counter int64
 
 type Metrics struct {
 	RuntimeMetrics map[string]Gauge
@@ -97,4 +94,16 @@ type Metrics struct {
 func InitMetricsStorage() Metrics {
 	metStor := Metrics{RuntimeMetrics: make(map[string]Gauge), PollCount: make(map[string]Counter)}
 	return metStor
+}
+
+
+//////////////////////
+//handler template/html
+type Pagecontent struct {
+	AllMetrics []Metric
+}
+
+type Metric struct {
+  Name  string
+  Value string
 }

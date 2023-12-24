@@ -9,7 +9,7 @@ import (
 )
 
 func TestMemory(t *testing.T) {
-	st := storage.MemoryStorage{MemoryMap: make(map[string]storage.Memory)}
+	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge), Counters: make(map[string]storage.Counter)}
 
 	tests := []struct {
 		testname string
@@ -42,21 +42,21 @@ func TestMemory(t *testing.T) {
 
 	go func(storage *storage.MemoryStorage ) {
 		for i := 0; i < 40; i++ {
-			storage.UpdateGauge(tests[i].testname, tests[i].gauge, tests[i].value)
+			storage.UpdateGauge(tests[i].gauge, tests[i].value)
 		}
 		wg.Done()
 	}(&st)
 
 	go func() {
 		for i := 0; i < 10; i++ {
-			st.UpdateGauge(tests[i].testname, tests[i].gauge, tests[i].value)
+			st.UpdateGauge(tests[i].gauge, tests[i].value)
 		}
 		wg.Done()
 	}()
 
 	go func(storage *storage.MemoryStorage) {
 		for i := 10; i < 20; i++ {
-			storage.UpdateGauge(tests[i].testname, tests[i].gauge, tests[i].value)
+			storage.UpdateGauge(tests[i].gauge, tests[i].value)
 		}
 		wg.Done()
 	}(&st)
@@ -64,14 +64,14 @@ func TestMemory(t *testing.T) {
 	go func() {
 		for i := 20; i < 40; i++ {
 
-			st.UpdateGauge(tests[i].testname, tests[i].gauge, tests[i].value)
+			st.UpdateGauge(tests[i].gauge, tests[i].value)
 		}
 		wg.Done()
 	}()
 
 	wg.Wait()
 	for _, tt := range tests {
-		value, err := st.GetGaugeByKey(tt.testname, tt.gauge)
+		value, err := st.GetGaugeByKey(tt.gauge)
 		require.NoError(t, err)
 		assert.Equal(t, value, tt.value)
 	}
