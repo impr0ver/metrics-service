@@ -45,9 +45,9 @@ func SetMetrics(metrics *storage.Metrics, mu *sync.Mutex) {
 	metrics.RuntimeMetrics["Sys"] = storage.Gauge(rtm.Sys)
 	metrics.RuntimeMetrics["TotalAlloc"] = storage.Gauge(rtm.TotalAlloc)
 	metrics.RuntimeMetrics["RandomValue"] = storage.Gauge(r.Float64())
-	
+
 	metrics.PollCount["PollCount"]++
-	
+
 	mu.Unlock()
 }
 
@@ -77,7 +77,7 @@ func SendMetrics(wg *sync.WaitGroup, mu *sync.Mutex, metrics *storage.Metrics, r
 
 		for key, value := range metricData {
 
-			fullGaugeURL := fmt.Sprintf("%s/update/gauge/%s/%.2f", URL, key, value) //"/update/gauge/someMetric/5.27"
+			fullGaugeURL := fmt.Sprintf("http://%s/update/gauge/%s/%.2f", URL, key, value) //"/update/gauge/someMetric/5.27"
 			//fmt.Println(fullGaugeUrl)
 			resp, err := http.Post(fullGaugeURL, "text/plain", nil)
 			if err != nil {
@@ -86,7 +86,7 @@ func SendMetrics(wg *sync.WaitGroup, mu *sync.Mutex, metrics *storage.Metrics, r
 			}
 			resp.Body.Close()
 		}
-		fullCountURL := fmt.Sprintf("%s/update/counter/PollCount/%d", URL, pollCount["PollCount"]) //"/update/counter/PollCount/25"
+		fullCountURL := fmt.Sprintf("http://%s/update/counter/PollCount/%d", URL, pollCount["PollCount"]) //"/update/counter/PollCount/25"
 		//fmt.Println(fullCountUrl)
 		resp, err := http.Post(fullCountURL, "text/plain", nil)
 		if err != nil {
