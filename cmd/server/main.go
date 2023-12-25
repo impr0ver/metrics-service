@@ -10,7 +10,7 @@ import (
 
 func main() {
 	var memStor = storage.MemoryStorage{Gauges: make(map[string]storage.Gauge), Counters: make(map[string]storage.Counter)}
-	addr := flag.String("a", "127.0.0.1:8080", "Server address and port.")
+	addr := flag.String("a", "localhost:8080", "Server address and port.")
 	flag.Parse()
 
 	r := handlers.ChiRouter(&memStor)
