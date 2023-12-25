@@ -15,8 +15,6 @@ const (
 )
 
 func main() {
-	//var metrics storage.Metrics
-	//metrics.RuntimeMetrics = make(map[string]storage.Gauge)
 	var metrics = storage.InitMetricsStorage()
 	var mu sync.Mutex
 	var wg sync.WaitGroup

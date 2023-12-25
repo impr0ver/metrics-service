@@ -83,8 +83,6 @@ func (st *MemoryStorage) UpdateGauge(key string, value Gauge) {
 
 // ////////////////////////////////
 // Agent storage
-// type Gauge float64
-// type Counter int64
 
 type Metrics struct {
 	RuntimeMetrics map[string]Gauge
@@ -98,7 +96,7 @@ func InitMetricsStorage() Metrics {
 
 
 //////////////////////
-//handler template/html
+//handler template/html storage
 type Pagecontent struct {
 	AllMetrics []Metric
 }
