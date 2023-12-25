@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"metrics-service/internal/storage"
 	"net/http"
+	"sort"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -14,9 +15,9 @@ func MetricsHandlerPost(memStor *storage.MemoryStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		//fmt.Println("reqURL:", r.URL) //  "/update/counter/someMetric/527"
 
-		metricType := chi.URLParam(r, "mType")
-		metricName := chi.URLParam(r, "mName")
-		metricValue := chi.URLParam(r, "mValue")
+		metricType := chi.URLParam(r, "mtype")
+		metricName := chi.URLParam(r, "mname")
+		metricValue := chi.URLParam(r, "mvalue")
 
 		fmt.Println("reqMetrics", metricType, metricName, metricValue)
 
@@ -62,10 +63,10 @@ func MetricsHandlerPost(memStor *storage.MemoryStorage) http.HandlerFunc {
 
 func MetricsHandlerGet(memStor *storage.MemoryStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println(chi.URLParam(r, "mType"), chi.URLParam(r, "mName"))
+		//fmt.Println(chi.URLParam(r, "mtype"), chi.URLParam(r, "mname"))
 
-		metricType := chi.URLParam(r, "mType")
-		metricName := chi.URLParam(r, "mName")
+		metricType := chi.URLParam(r, "mtype")
+		metricName := chi.URLParam(r, "mname")
 
 		switch metricType {
 		case "counter":
@@ -140,8 +141,19 @@ func MetricsHandlerGetAll(memStor *storage.MemoryStorage) http.HandlerFunc {
 			allMetrics = append(allMetrics, storage.Metric{Name: name, Value: fmt.Sprintf("%d", value)})
 		}
 
+		sort.Slice(allMetrics, func(i, j int) bool {		//need for unit test for Equal test
+			return allMetrics[i].Name < allMetrics[j].Name
+		})
 		pContent.AllMetrics = allMetrics
 
 		tmpl.Execute(w, pContent)
 	}
+}
+
+func ChiRouter(memStor *storage.MemoryStorage) *chi.Mux {
+	r := chi.NewRouter()
+	r.Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))
+	r.Get("/value/{mtype}/{mname}", MetricsHandlerGet(memStor))
+	r.Get("/", MetricsHandlerGetAll(memStor))
+	return r
 }

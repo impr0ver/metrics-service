@@ -5,18 +5,12 @@ import (
 	"metrics-service/internal/handlers"
 	"metrics-service/internal/storage"
 	"net/http"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func main() {
-	r := chi.NewRouter()
 	var memStor = storage.MemoryStorage{Gauges: make(map[string]storage.Gauge), Counters: make(map[string]storage.Counter)}
-
-	r.Post("/update/{mType}/{mName}/{mValue}", handlers.MetricsHandlerPost(&memStor))
-	r.Get("/value/{mType}/{mName}", handlers.MetricsHandlerGet(&memStor))
-	r.Get("/", handlers.MetricsHandlerGetAll(&memStor))
+	r := handlers.ChiRouter(&memStor)
 
 	log.Println("Server is listening...")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	log.Fatal(http.ListenAndServe("127.0.0.1:8080", r))
 }
