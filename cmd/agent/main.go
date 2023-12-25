@@ -5,13 +5,12 @@ import (
 	"metrics-service/internal/agutil"
 	"metrics-service/internal/storage"
 	"sync"
-	"time"
 )
 
 var (
-	reportInterval = flag.Duration("r", 10*time.Second, "Frequency of sending metrics to the server.")   //reportInterval time.Duration = 10 * time.Second
-	pollInterval   = flag.Duration("p", 2*time.Second, "Frequency of polling metrics from the package.") //pollInterval   time.Duration = 2 * time.Second
-	URL            = flag.String("a", "localhost:8080", "Server address and port.")                      //URL = "http://127.0.0.1:8080"
+	reportInterval = flag.Int("r", 10, "Frequency of sending metrics to the server.")   //reportInterval time.Duration = 10 * time.Second
+	pollInterval   = flag.Int("p", 2, "Frequency of polling metrics from the package.") //pollInterval   time.Duration = 2 * time.Second
+	URL            = flag.String("a", "localhost:8080", "Server address and port.")          //URL = "http://127.0.0.1:8080"
 )
 
 func main() {

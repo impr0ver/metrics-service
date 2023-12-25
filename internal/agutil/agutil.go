@@ -51,22 +51,22 @@ func SetMetrics(metrics *storage.Metrics, mu *sync.Mutex) {
 	mu.Unlock()
 }
 
-func InitMetrics(wg *sync.WaitGroup, mu *sync.Mutex, metrics *storage.Metrics, pollInterval time.Duration) {
+func InitMetrics(wg *sync.WaitGroup, mu *sync.Mutex, metrics *storage.Metrics, pollInterval int) {
 	defer wg.Done()
 
 	for {
-		time.Sleep(pollInterval)
+		time.Sleep(time.Duration(pollInterval)*time.Second)
 
 		fmt.Println("Set metrics")
 		SetMetrics(metrics, mu)
 	}
 }
 
-func SendMetrics(wg *sync.WaitGroup, mu *sync.Mutex, metrics *storage.Metrics, reportInterval time.Duration, URL string) {
+func SendMetrics(wg *sync.WaitGroup, mu *sync.Mutex, metrics *storage.Metrics, reportInterval int, URL string) {
 	defer wg.Done()
 
 	for {
-		time.Sleep(reportInterval)
+		time.Sleep(time.Duration(reportInterval)*time.Second)
 
 		mu.Lock()
 		metricData := metrics.RuntimeMetrics
