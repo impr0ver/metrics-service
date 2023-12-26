@@ -15,12 +15,12 @@ func Sleep(suffix string) {
 	time.Sleep(t)
 }
 
-func PrepareUrl(URL *url.URL) []string {
-	trimUrl := strings.Trim(URL.String(), "/update") //  "counter/someMetric/527" //0, 1, 2
-	return strings.Split(trimUrl, "/")
+func PrepareURL(URL *url.URL) []string {
+	trimURL := strings.Trim(URL.String(), "/update") //  "counter/someMetric/527" //0, 1, 2
+	return strings.Split(trimURL, "/")
 }
 
-func ParseUrlMetrics(reqMetrics []string, memStor *storage.MemStorage) int {
+func ParseURLMetrics(reqMetrics []string, memStor *storage.MemStorage) int {
 	if len(reqMetrics) != 3 {
 		return http.StatusNotFound
 	}

@@ -14,9 +14,9 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		fmt.Println("reqURL:", r.URL) //  "/update/counter/someMetric/527"
 
-		splitUrlMetrics := util.PrepareUrl(r.URL) //  "[counter, someMetric, 527]" //0, 1, 2
+		splitURLMetrics := util.PrepareURL(r.URL) //  "[counter, someMetric, 527]" //0, 1, 2
 
-		statusCode := util.ParseUrlMetrics(splitUrlMetrics, memStor)
+		statusCode := util.ParseURLMetrics(splitURLMetrics, memStor)
 
 		w.WriteHeader(statusCode)
 
