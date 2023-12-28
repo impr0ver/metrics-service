@@ -3,8 +3,8 @@ package handlers_test
 import (
 	"fmt"
 	"io"
-	"metrics-service/internal/handlers"
-	"metrics-service/internal/storage"
+	"github.com/impr0ver/metrics-service/internal/handlers"
+	"github.com/impr0ver/metrics-service/internal/storage"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -38,7 +38,7 @@ func TestMetricsHandlerGet(t *testing.T) {
 	value := fmt.Sprintf("Sys = %f, tstcounter = %d", foundSys, foundCounter)
 	fmt.Println(value)
 
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage)) //ts := httptest.NewServer(handlers.MetricsHandlerGet(&memstorage)) !!!
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage)) 
 	defer ts.Close()
 
 	var testTable = []struct {
@@ -75,7 +75,7 @@ func TestMetricsHandlerGetAll(t *testing.T) {
 	memstorage.UpdateGauge("RandomValue", storage.Gauge(0.99))
 	memstorage.UpdateGauge("NextGC", storage.Gauge(1764408))
 
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage)) //ts := httptest.NewServer(handlers.MetricsHandlerGet(&memstorage)) !!!
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage)) 
 	defer ts.Close()
 
 	var testTable = []struct {
@@ -135,7 +135,7 @@ func TestMetricsHandlerPost(t *testing.T) {
 	}
 }
 
-func testRequest(t *testing.T, ts *httptest.Server, method, path string) (/**http.Response*/int, string) {
+func testRequest(t *testing.T, ts *httptest.Server, method, path string) (int, string) {
 	req, err := http.NewRequest(method, ts.URL+path, nil)
 	require.NoError(t, err)
 

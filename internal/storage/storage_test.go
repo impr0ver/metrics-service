@@ -1,7 +1,7 @@
 package storage_test
 
 import (
-	"metrics-service/internal/storage"
+	"github.com/impr0ver/metrics-service/internal/storage"
 	"sync"
 	"testing"
 	"github.com/stretchr/testify/require"

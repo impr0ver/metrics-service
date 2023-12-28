@@ -1,4 +1,4 @@
-module metrics-service
+module github.com/impr0ver/metrics-service
 
 go 1.20
 

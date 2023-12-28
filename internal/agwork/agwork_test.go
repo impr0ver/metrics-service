@@ -1,37 +1,17 @@
-package agutil
+package agwork
 
 import (
-	"metrics-service/internal/storage"
-	"os"
 	"sync"
 	"testing"
+
+	"github.com/impr0ver/metrics-service/internal/agmemory"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// func TestInitConfig1(t *testing.T) {
-// 	var cfg Config
-
-// 	os.Setenv("ADDRESS", "192.168.30.1:7777")
-// 	InitConfig(&cfg)
-// 	assert.Equal(t, "192.168.30.1:7777", cfg.Address, "test #")
-	
-// 	os.Unsetenv("ADDRESS")
-// }
-
-func TestInitConfig2(t *testing.T) {
-	var cfg Config
-
-	os.Setenv("ADDRESS", "")
-	InitConfig(&cfg)
-	assert.Equal(t, "localhost:8080", cfg.Address, "test ##")
-	
-	os.Unsetenv("ADDRESS")
-}
-
 func TestSetMetrics(t *testing.T) {
-	st := storage.InitMetricsStorage()
+	st := agmemory.NewAgMemory()
 	var mu sync.Mutex
 
 	SetMetrics(&st, &mu)
@@ -96,7 +76,7 @@ func TestSetMetrics(t *testing.T) {
 	require.True(t, ok)
 
 	got := st.PollCount["PollCount"]
-	var want storage.Counter = 1
+	var want agmemory.Counter = 1
 	//or
 	if got != want {
 		t.Errorf("got %q, wanted %q", got, want)

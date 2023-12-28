@@ -14,8 +14,13 @@ type MemoryStorage struct {
 	Counters map[string]Counter
 }
 
+func NewMemoryStorage() *MemoryStorage {
+	memStor := MemoryStorage{Gauges: make(map[string]Gauge), Counters: make(map[string]Counter)}
+	return &memStor
+}
 
-// CRUD DB operations analog in memory
+
+// Analog CRUD DB operations in memory
 // create Memory interface{}
 type MemoryStorager interface {
 	AddNewCounter(key string, value Counter)
@@ -81,21 +86,6 @@ func (st *MemoryStorage) UpdateGauge(key string, value Gauge) {
 }
 
 
-// ////////////////////////////////
-// Agent storage
-
-type Metrics struct {
-	RuntimeMetrics map[string]Gauge
-	PollCount      map[string]Counter
-}
-
-func InitMetricsStorage() Metrics {
-	metStor := Metrics{RuntimeMetrics: make(map[string]Gauge), PollCount: make(map[string]Counter)}
-	return metStor
-}
-
-
-//////////////////////
 //handler template/html storage
 type Pagecontent struct {
 	AllMetrics []Metric

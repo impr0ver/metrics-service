@@ -3,7 +3,7 @@ package handlers
 import (
 	"fmt"
 	"html/template"
-	"metrics-service/internal/storage"
+	"github.com/impr0ver/metrics-service/internal/storage"
 	"net/http"
 	"sort"
 	"strconv"
@@ -11,18 +11,27 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+
+const(
+	mType = "mtype"
+	mName = "mname"
+	mValue = "mvalue"
+	counter = "counter"
+	gauge = "gauge"
+) 
+	
+
 func MetricsHandlerPost(memStor *storage.MemoryStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		//fmt.Println("reqURL:", r.URL) //  "/update/counter/someMetric/527"
 
-		metricType := chi.URLParam(r, "mtype")
-		metricName := chi.URLParam(r, "mname")
-		metricValue := chi.URLParam(r, "mvalue")
+		metricType := chi.URLParam(r, mType)
+		metricName := chi.URLParam(r, mName)
+		metricValue := chi.URLParam(r, mValue)
 
 		fmt.Println("reqMetrics", metricType, metricName, metricValue)
 
 		switch metricType {
-		case "counter":
+		case counter:
 			counterValue, err := strconv.ParseInt(metricValue, 10, 64)
 			if err != nil {
 				w.Header().Set("Content-Type", "text/plain")
@@ -40,7 +49,7 @@ func MetricsHandlerPost(memStor *storage.MemoryStorage) http.HandlerFunc {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Registered successfully!"))
 
-		case "gauge":
+		case gauge:
 			gaugeValue, err := strconv.ParseFloat(metricValue, 64)
 			if err != nil {
 				w.Header().Set("Content-Type", "text/plain")
@@ -63,13 +72,12 @@ func MetricsHandlerPost(memStor *storage.MemoryStorage) http.HandlerFunc {
 
 func MetricsHandlerGet(memStor *storage.MemoryStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		//fmt.Println(chi.URLParam(r, "mtype"), chi.URLParam(r, "mname"))
 
-		metricType := chi.URLParam(r, "mtype")
-		metricName := chi.URLParam(r, "mname")
+		metricType := chi.URLParam(r, mType)
+		metricName := chi.URLParam(r, mName)
 
 		switch metricType {
-		case "counter":
+		case counter:
 			foundValue, err := memStor.GetCounterByKey(metricName)
 			if err != nil {
 				w.Header().Set("Content-Type", "text/plain")
@@ -79,7 +87,7 @@ func MetricsHandlerGet(memStor *storage.MemoryStorage) http.HandlerFunc {
 			}
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(fmt.Sprintf("%d", int(foundValue))))
-		case "gauge":
+		case gauge:
 			foundValue, err := memStor.GetGaugeByKey(metricName)
 			if err != nil {
 				w.Header().Set("Content-Type", "text/plain")
