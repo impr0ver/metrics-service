@@ -3,10 +3,12 @@ package main
 import (
 	"flag"
 	"log"
-	"github.com/impr0ver/metrics-service/internal/handlers"
-	"github.com/impr0ver/metrics-service/internal/storage"
 	"net/http"
 	"os"
+
+	"github.com/impr0ver/metrics-service/internal/handlers"
+	"github.com/impr0ver/metrics-service/internal/logger"
+	"github.com/impr0ver/metrics-service/internal/storage"
 
 	"github.com/caarlos0/env/v6"
 )
@@ -33,9 +35,10 @@ func main() {
 	var memStor = storage.NewMemoryStorage()
 	var cfg Config
 	InitConfig(&cfg)
+	var sLogger = logger.NewLogger()
 
-	r := handlers.ChiRouter(memStor)
+	r := handlers.ChiRouter(memStor, sLogger)
 
-	log.Println("Server is listening...")
-	log.Fatal(http.ListenAndServe(cfg.Address, r))
+	sLogger.Info("Server is listening...")//log.Println("Server is listening...")
+	sLogger.Fatal(http.ListenAndServe(cfg.Address, r))//log.Fatal(http.ListenAndServe(cfg.Address, r))
 }

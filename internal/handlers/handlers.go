@@ -3,23 +3,25 @@ package handlers
 import (
 	"fmt"
 	"html/template"
-	"github.com/impr0ver/metrics-service/internal/storage"
 	"net/http"
 	"sort"
 	"strconv"
+	"time"
+
+	"github.com/impr0ver/metrics-service/internal/logger"
+	"github.com/impr0ver/metrics-service/internal/storage"
+	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
 )
 
-
-const(
-	mType = "mtype"
-	mName = "mname"
-	mValue = "mvalue"
+const (
+	mType   = "mtype"
+	mName   = "mname"
+	mValue  = "mvalue"
 	counter = "counter"
-	gauge = "gauge"
-) 
-	
+	gauge   = "gauge"
+)
 
 func MetricsHandlerPost(memStor *storage.MemoryStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +151,7 @@ func MetricsHandlerGetAll(memStor *storage.MemoryStorage) http.HandlerFunc {
 			allMetrics = append(allMetrics, storage.Metric{Name: name, Value: fmt.Sprintf("%d", value)})
 		}
 
-		sort.Slice(allMetrics, func(i, j int) bool {		//need for unit test for Equal test
+		sort.Slice(allMetrics, func(i, j int) bool { //need for unit test for Equal test
 			return allMetrics[i].Name < allMetrics[j].Name
 		})
 		pContent.AllMetrics = allMetrics
@@ -158,10 +160,36 @@ func MetricsHandlerGetAll(memStor *storage.MemoryStorage) http.HandlerFunc {
 	}
 }
 
-func ChiRouter(memStor *storage.MemoryStorage) *chi.Mux {
+func ChiRouter(memStor *storage.MemoryStorage, sLogger *zap.SugaredLogger) *chi.Mux {
 	r := chi.NewRouter()
-	r.Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))
-	r.Get("/value/{mtype}/{mname}", MetricsHandlerGet(memStor))
-	r.Get("/", MetricsHandlerGetAll(memStor))
+
+	//r.Use(middleware.Logger) //but this method does all the work
+
+	logging := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			start := time.Now()
+
+			lw := logger.NewResponceWriterWithLogging(w)
+
+			next.ServeHTTP(lw, r) // servicing the original request
+			duration := time.Since(start)
+			
+			//send request information to zap
+			sLogger.Infoln(
+				"\033[93m"+"uri", r.RequestURI+"\033[0m",
+				"\033[96m"+"method", r.Method+"\033[0m",
+				"\033[32m"+"duration", duration.String()+"\033[0m",
+				"\033[36m"+"status", lw.ResponseData.Status,
+				"size", lw.ResponseData.Size,
+				"\033[0m",
+			)
+		})
+	}
+
+	r.With(logging).Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))
+	r.With(logging).Get("/value/{mtype}/{mname}", MetricsHandlerGet(memStor))
+	r.With(logging).Get("/", MetricsHandlerGetAll(memStor))
+
 	return r
 }

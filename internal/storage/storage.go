@@ -32,9 +32,11 @@ type MemoryStorager interface {
 }
 
 func (st *MemoryStorage) AddNewCounter(key string, counter Counter) {
-	st.Lock()
-	st.Counters[key] += counter
-	st.Unlock()
+	if counter != 0 {
+		st.Lock()
+		st.Counters[key] += counter
+		st.Unlock()
+	}
 }
 
 func (st *MemoryStorage) GetAllCounters() map[string]Counter {
@@ -85,13 +87,12 @@ func (st *MemoryStorage) UpdateGauge(key string, value Gauge) {
 	st.Gauges[key] = value
 }
 
-
-//handler template/html storage
+// handler template/html storage
 type Pagecontent struct {
 	AllMetrics []Metric
 }
 
 type Metric struct {
-  Name  string
-  Value string
+	Name  string
+	Value string
 }

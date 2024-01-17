@@ -83,3 +83,4 @@ func SendMetrics(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval int, 
 	}
 	resp.Body.Close()
 }
+

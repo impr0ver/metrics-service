@@ -3,11 +3,13 @@ package handlers_test
 import (
 	"fmt"
 	"io"
-	"github.com/impr0ver/metrics-service/internal/handlers"
-	"github.com/impr0ver/metrics-service/internal/storage"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/impr0ver/metrics-service/internal/handlers"
+	"github.com/impr0ver/metrics-service/internal/logger"
+	"github.com/impr0ver/metrics-service/internal/storage"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,7 +40,8 @@ func TestMetricsHandlerGet(t *testing.T) {
 	value := fmt.Sprintf("Sys = %f, tstcounter = %d", foundSys, foundCounter)
 	fmt.Println(value)
 
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage)) 
+	var sLogger = logger.NewLogger()
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage, sLogger))
 	defer ts.Close()
 
 	var testTable = []struct {
@@ -75,7 +78,8 @@ func TestMetricsHandlerGetAll(t *testing.T) {
 	memstorage.UpdateGauge("RandomValue", storage.Gauge(0.99))
 	memstorage.UpdateGauge("NextGC", storage.Gauge(1764408))
 
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage)) 
+	var sLogger = logger.NewLogger()
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage, sLogger))
 	defer ts.Close()
 
 	var testTable = []struct {
@@ -95,12 +99,12 @@ func TestMetricsHandlerGetAll(t *testing.T) {
 	}
 }
 
-
 func TestMetricsHandlerPost(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
 
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage)) //ts := httptest.NewServer(handlers.MetricsHandlerPost(&memstorage)) !!!
+	var sLogger = logger.NewLogger()
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage, sLogger)) //ts := httptest.NewServer(handlers.MetricsHandlerPost(&memstorage)) !!!
 	defer ts.Close()
 
 	var testTable = []struct {
