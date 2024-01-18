@@ -30,7 +30,7 @@ func TestMetricsHandlerPostJSON(t *testing.T) {
 		httpStatus int
 	}
 
-	var gaugeVal float64 = 1700000.1111
+	var gaugeVal = 1700000.1111
 	var countVal int64 = 55
 	var countVal2 int64 = 5
 	var countValRes int64 = 60 //55 + 5
@@ -99,7 +99,7 @@ func TestMetricsHandlerGetJSON(t *testing.T) {
 		httpStatus int
 	}
 
-	var gaugeVal float64 = 234.432
+	var gaugeVal = 234.432
 	var countVal int64 = 555
 
 	tests := []struct {
