@@ -1,10 +1,12 @@
 package handlers_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/impr0ver/metrics-service/internal/handlers"
@@ -14,6 +16,136 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMetricsHandlerPostJSON(t *testing.T) {
+	type Metrics struct {
+		ID    string   `json:"id"`
+		MType string   `json:"type"`
+		Delta *int64   `json:"delta,omitempty"` //countValue
+		Value *float64 `json:"value,omitempty"` //gaugeValue
+	}
+
+	type want struct {
+		metric     Metrics
+		httpStatus int
+	}
+
+	var gaugeVal float64 = 1700000.1111
+	var countVal int64 = 55
+	var countVal2 int64 = 5
+	var countValRes int64 = 60 //55 + 5
+
+	tests := []struct {
+		name  string
+		value Metrics
+		want  want
+	}{
+		{"test gauge #1",
+			Metrics{ID: "Sys", MType: "gauge", Value: (*float64)(&gaugeVal)},
+			want{Metrics{ID: "Sys", MType: "gauge", Value: &gaugeVal, Delta: nil}, http.StatusOK}},
+		{"test counter #2",
+			Metrics{ID: "MyCount", MType: "counter", Delta: (*int64)(&countVal)},
+			want{Metrics{ID: "MyCount", MType: "counter", Delta: &countVal}, http.StatusOK}},
+		{"test add counter test #3",
+			Metrics{ID: "MyCount", MType: "counter", Delta: (*int64)(&countVal2)},
+			want{Metrics{ID: "MyCount", MType: "counter", Delta: &countValRes}, http.StatusOK}},
+		{"test counter #4",
+			Metrics{ID: "NewCounter", MType: "counter", Delta: (*int64)(&countVal)},
+			want{Metrics{ID: "NewCounter", MType: "counter", Value: nil, Delta: &countVal}, http.StatusOK}},
+	}
+	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sLogger = logger.NewLogger()
+			r := handlers.ChiRouter(&memstorage, sLogger)
+
+			mbytes, _ := json.Marshal(tt.value)
+			bodyReader := strings.NewReader(string(mbytes))
+			request := httptest.NewRequest(http.MethodPost, "/update/", bodyReader)
+			request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, request)
+
+			res := w.Result()
+
+			//check status code
+			if res.StatusCode != tt.want.httpStatus {
+				t.Errorf("expected status code %d, got %d", tt.want.httpStatus, res.StatusCode)
+			}
+			var metric Metrics
+
+			err := json.NewDecoder(res.Body).Decode(&metric)
+			res.Body.Close()
+
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, tt.want.metric, metric)
+		})
+	}
+}
+
+func TestMetricsHandlerGetJSON(t *testing.T) {
+	type Metrics struct {
+		ID    string   `json:"id"`
+		MType string   `json:"type"`
+		Delta *int64   `json:"delta,omitempty"` //countValue
+		Value *float64 `json:"value,omitempty"` //gaugeValue
+	}
+	type want struct {
+		metric     Metrics
+		httpStatus int
+	}
+
+	var gaugeVal float64 = 234.432
+	var countVal int64 = 555
+
+	tests := []struct {
+		name  string
+		value Metrics
+		want  want
+	}{
+		{"simple gauge test #1",
+			Metrics{ID: "Sys", MType: "gauge"},
+			want{Metrics{ID: "Sys", MType: "gauge", Value: (*float64)(&gaugeVal), Delta: nil}, http.StatusOK}},
+		{"simple counter test #2",
+			Metrics{ID: "MyCounter", MType: "counter"},
+			want{Metrics{ID: "MyCounter", MType: "counter", Delta: (*int64)(&countVal)}, http.StatusOK}},
+	}
+	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+	memstorage.UpdateGauge("Sys", 234.432)
+	memstorage.AddNewCounter("MyCounter", 555)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sLogger = logger.NewLogger()
+			r := handlers.ChiRouter(&memstorage, sLogger)
+			mbytes, _ := json.Marshal(tt.value)
+			bodyReader := strings.NewReader(string(mbytes))
+			request := httptest.NewRequest(http.MethodPost, "/value/", bodyReader)
+			request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, request)
+
+			res := w.Result()
+
+			if res.StatusCode != tt.want.httpStatus {
+				t.Errorf("Expected status code %d, got %d", tt.want.httpStatus, res.StatusCode)
+			}
+			var metric Metrics
+			err := json.NewDecoder(res.Body).Decode(&metric)
+			res.Body.Close()
+
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, tt.want.metric, metric)
+		})
+	}
+}
 
 func TestMetricsHandlerGet(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),

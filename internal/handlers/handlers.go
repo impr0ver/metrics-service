@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -160,10 +162,131 @@ func MetricsHandlerGetAll(memStor *storage.MemoryStorage) http.HandlerFunc {
 	}
 }
 
+func checkErrors(err error, httpStatus int, w http.ResponseWriter) bool {
+	if err != nil {
+		errMessage := struct {
+			Error string `json:"error"`
+		}{Error: err.Error()}
+
+		msgbytes, _ := json.Marshal(errMessage)
+		w.WriteHeader(httpStatus)
+		w.Write(msgbytes)
+		return true
+	}
+	return false
+}
+
+func MetricsHandlerPostJSON(memStor *storage.MemoryStorage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var metric storage.Metrics
+		err := json.NewDecoder(r.Body).Decode(&metric)
+		if checkErrors(err, http.StatusBadRequest, w) {
+			return
+		}
+
+		if metric.Delta != nil {
+			fmt.Println("reqMetrics", metric.MType, metric.ID, *metric.Delta)
+		}
+		if metric.Value != nil {
+			fmt.Println("reqMetrics", metric.MType, metric.ID, *metric.Value)
+		}
+
+		switch metric.MType {
+		case counter:
+			if metric.Delta == nil {
+				checkErrors(errors.New("bad metric value"), http.StatusBadRequest, w)
+				return
+			}
+			memStor.AddNewCounter(metric.ID, storage.Counter(*metric.Delta))
+			realVal, err := memStor.GetCounterByKey(metric.ID)
+			if checkErrors(err, http.StatusInternalServerError, w) {
+				return
+			}
+			metric.Delta = (*int64)(&realVal)
+
+		case gauge:
+			if metric.Value == nil {
+				checkErrors(errors.New("bad metric value"), http.StatusBadRequest, w)
+				return
+			}
+			memStor.UpdateGauge(metric.ID, storage.Gauge(*metric.Value))
+			realVal, err := memStor.GetGaugeByKey(metric.ID)
+			if checkErrors(err, http.StatusInternalServerError, w) {
+				return
+			}
+			metric.Value = (*float64)(&realVal)
+
+		default:
+			checkErrors(errors.New("unsupported metric type"), http.StatusBadRequest, w)
+			return
+		}
+
+		answer, err := json.Marshal(metric)
+		if checkErrors(err, http.StatusInternalServerError, w) {
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(answer)
+	}
+}
+
+func MetricsHandlerGetJSON(memStor *storage.MemoryStorage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		errParse := func(err error, httpStatus int) bool {
+			if err != nil {
+				msgbytes, _ := json.Marshal(err.Error())
+				w.WriteHeader(httpStatus)
+				w.Write(msgbytes)
+				return true
+			}
+			return false
+		}
+
+		var metric storage.Metrics
+		err := json.NewDecoder(r.Body).Decode(&metric)
+		if errParse(err, http.StatusBadRequest) {
+			return
+		}
+
+		switch metric.MType {
+		case counter:
+			realValue, err := memStor.GetCounterByKey(metric.ID)
+			if errParse(err, http.StatusNotFound) {
+				return
+			}
+			metric.Delta = (*int64)(&realValue)
+			metric.Value = nil
+
+		case gauge:
+			realValue, err := memStor.GetGaugeByKey(metric.ID)
+			if errParse(err, http.StatusNotFound) {
+				return
+			}
+			metric.Value = (*float64)(&realValue)
+			metric.Delta = nil
+
+		default:
+			errParse(errors.New("unsupported metric type"), http.StatusBadRequest)
+			return
+		}
+
+		answer, err := json.Marshal(metric)
+		if errParse(err, http.StatusInternalServerError) {
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(answer)
+	}
+}
+
 func ChiRouter(memStor *storage.MemoryStorage, sLogger *zap.SugaredLogger) *chi.Mux {
 	r := chi.NewRouter()
-
-	//r.Use(middleware.Logger) //but this method does all the work
 
 	logging := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +297,7 @@ func ChiRouter(memStor *storage.MemoryStorage, sLogger *zap.SugaredLogger) *chi.
 
 			next.ServeHTTP(lw, r) // servicing the original request
 			duration := time.Since(start)
-			
+
 			//send request information to zap
 			sLogger.Infoln(
 				"\033[93m"+"uri", r.RequestURI+"\033[0m",
@@ -190,6 +313,9 @@ func ChiRouter(memStor *storage.MemoryStorage, sLogger *zap.SugaredLogger) *chi.
 	r.With(logging).Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))
 	r.With(logging).Get("/value/{mtype}/{mname}", MetricsHandlerGet(memStor))
 	r.With(logging).Get("/", MetricsHandlerGetAll(memStor))
+
+	r.Post("/value/", MetricsHandlerGetJSON(memStor))
+	r.Post("/update/", MetricsHandlerPostJSON(memStor))
 
 	return r
 }

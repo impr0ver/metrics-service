@@ -1,6 +1,8 @@
 package agwork
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -84,3 +86,46 @@ func SendMetrics(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval int, 
 	resp.Body.Close()
 }
 
+func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval int, URL string) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	metricData := memory.RuntimeMetrics
+	pollCount := memory.PollCount["PollCount"]
+
+	fullURL := fmt.Sprintf("http://%s/update/", URL)
+	var agMetrics agmemory.Metrics
+
+	//prepare and send gauges
+	for key, value := range metricData {
+		agMetrics.Value = (*float64)(&value)
+		agMetrics.MType = "gauge"
+		agMetrics.ID = key
+		buff := new(bytes.Buffer)
+
+		json.NewEncoder(buff).Encode(agMetrics)
+
+		resp, err := http.Post(fullURL, "application/json", buff)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		resp.Body.Close()
+	}
+	//prepare and send counter
+	agMetrics.ID = "PollCount"
+	agMetrics.MType = "counter"
+	agMetrics.Value = nil
+	agMetrics.Delta = (*int64)(&pollCount)
+
+	buff := new(bytes.Buffer)
+
+	json.NewEncoder(buff).Encode(agMetrics)
+
+	resp, err := http.Post(fullURL, "application/json", buff)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	resp.Body.Close()
+}
