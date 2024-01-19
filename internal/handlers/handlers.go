@@ -310,7 +310,6 @@ func logging(next http.Handler) http.Handler {
 	})
 }
 
-
 func gzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ow := w
@@ -321,7 +320,7 @@ func gzipMiddleware(next http.Handler) http.Handler {
 		supportsType := strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json")
 		acceptEncoding := r.Header.Get("Accept-Encoding")
 		supportsGzip := strings.Contains(acceptEncoding, "gzip")
-		if supportsGzip && supportsType && r.Method == "POST"  { //r.Method == "POST" for normal open GET-Request via browser (without gzip compress)
+		if supportsGzip && supportsType { //&& r.Method == "POST" for normal open GET-Request via browser (without gzip compress)
 			// compress http.ResponseWriter
 			cw := gzip.NewCompressWriter(w)
 			ow = cw
