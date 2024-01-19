@@ -159,8 +159,13 @@ func MetricsHandlerGetAll(memStor *storage.MemoryStorage) http.HandlerFunc {
 		})
 		pContent.AllMetrics = allMetrics
 
+
+		gz := gzip.CompressTextHTML(w)
+		defer gz.Close()
 		w.Header().Set("Content-Type", "text/html")
-		tmpl.Execute(w, pContent)
+		w.Header().Add("Content-Encoding", "gzip")
+
+		tmpl.Execute(gz, pContent)
 	}
 }
 
