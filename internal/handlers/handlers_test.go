@@ -1,6 +1,8 @@
 package handlers_test
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,12 +12,84 @@ import (
 	"testing"
 
 	"github.com/impr0ver/metrics-service/internal/handlers"
-	"github.com/impr0ver/metrics-service/internal/logger"
 	"github.com/impr0ver/metrics-service/internal/storage"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestGzipMiddleware(t *testing.T) {
+	type metricAlias struct {
+		ID    string  `json:"id"`
+		MType string  `json:"type"`
+		Delta int64   `json:"delta,omitempty"`
+		Value float64 `json:"value,omitempty"`
+	}
+	type want struct {
+		metric     metricAlias
+		httpStatus int
+	}
+	tests := []struct {
+		name  string
+		value metricAlias
+		want  want
+	}{
+		{"simple gauge test #1",
+			metricAlias{ID: "Alloc", MType: "gauge"},
+			want{metricAlias{ID: "Alloc", MType: "gauge", Value: 555.34, Delta: 0}, http.StatusOK}},
+		{"simple counter test #2",
+			metricAlias{ID: "MyCounter", MType: "counter"},
+			want{metricAlias{ID: "MyCounter", MType: "counter", Delta: 95}, http.StatusOK}},
+	}
+
+	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+	memstorage.UpdateGauge("Alloc", 555.34)
+	memstorage.AddNewCounter("MyCounter", 95)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := handlers.ChiRouter(&memstorage)
+
+			jData, _ := json.Marshal(tt.value)
+			var buf bytes.Buffer
+			g := gzip.NewWriter(&buf)
+			g.Write(jData)
+			g.Close()
+			request := httptest.NewRequest(http.MethodPost, "/value/", &buf)
+			request.Header.Add("Content-Encoding", "gzip")
+			request.Header.Add("Accept-Encoding", "gzip")
+			request.Header.Set("Content-Type", "application/json")
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, request)
+
+			res := w.Result()
+			defer res.Body.Close()
+
+			if res.StatusCode != tt.want.httpStatus {
+				t.Errorf("Expected status code %d, got %d", tt.want.httpStatus, res.StatusCode)
+			}
+			gr, _ := gzip.NewReader(res.Body)
+			var metric metricAlias
+			err := json.NewDecoder(gr).Decode(&metric)
+			gr.Close()
+
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, tt.want.metric, metric)
+			switch mtype := tt.want.metric.MType; mtype {
+			case "counter":
+				v, _ := memstorage.GetCounterByKey(tt.want.metric.ID)
+				assert.Equal(t, int64(v), tt.want.metric.Delta)
+			case "gauge":
+				v, _ := memstorage.GetGaugeByKey(tt.want.metric.ID)
+				assert.Equal(t, float64(v), tt.want.metric.Value)
+			}
+		})
+	}
+}
 
 func TestMetricsHandlerPostJSON(t *testing.T) {
 	type Metrics struct {
@@ -58,8 +132,8 @@ func TestMetricsHandlerPostJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var sLogger = logger.NewLogger()
-			r := handlers.ChiRouter(&memstorage, sLogger)
+			//var sLogger = logger.NewLogger()
+			r := handlers.ChiRouter(&memstorage /*, sLogger*/)
 
 			mbytes, _ := json.Marshal(tt.value)
 			bodyReader := strings.NewReader(string(mbytes))
@@ -121,8 +195,8 @@ func TestMetricsHandlerGetJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var sLogger = logger.NewLogger()
-			r := handlers.ChiRouter(&memstorage, sLogger)
+			//var sLogger = logger.NewLogger()
+			r := handlers.ChiRouter(&memstorage /*, sLogger*/)
 			mbytes, _ := json.Marshal(tt.value)
 			bodyReader := strings.NewReader(string(mbytes))
 			request := httptest.NewRequest(http.MethodPost, "/value/", bodyReader)
@@ -172,8 +246,8 @@ func TestMetricsHandlerGet(t *testing.T) {
 	value := fmt.Sprintf("Sys = %f, tstcounter = %d", foundSys, foundCounter)
 	fmt.Println(value)
 
-	var sLogger = logger.NewLogger()
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage, sLogger))
+	//var sLogger = logger.NewLogger()
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage /*, sLogger*/))
 	defer ts.Close()
 
 	var testTable = []struct {
@@ -210,8 +284,8 @@ func TestMetricsHandlerGetAll(t *testing.T) {
 	memstorage.UpdateGauge("RandomValue", storage.Gauge(0.99))
 	memstorage.UpdateGauge("NextGC", storage.Gauge(1764408))
 
-	var sLogger = logger.NewLogger()
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage, sLogger))
+	//var sLogger = logger.NewLogger()
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage /*, sLogger*/))
 	defer ts.Close()
 
 	var testTable = []struct {
@@ -235,8 +309,8 @@ func TestMetricsHandlerPost(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
 
-	var sLogger = logger.NewLogger()
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage, sLogger)) //ts := httptest.NewServer(handlers.MetricsHandlerPost(&memstorage)) !!!
+	//var sLogger = logger.NewLogger()
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage /*, sLogger*/)) //ts := httptest.NewServer(handlers.MetricsHandlerPost(&memstorage)) !!!
 	defer ts.Close()
 
 	var testTable = []struct {

@@ -8,11 +8,12 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/impr0ver/metrics-service/internal/gzip"
 	"github.com/impr0ver/metrics-service/internal/logger"
 	"github.com/impr0ver/metrics-service/internal/storage"
-	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -158,6 +159,7 @@ func MetricsHandlerGetAll(memStor *storage.MemoryStorage) http.HandlerFunc {
 		})
 		pContent.AllMetrics = allMetrics
 
+		w.Header().Set("Content-Type", "text/html")
 		tmpl.Execute(w, pContent)
 	}
 }
@@ -285,37 +287,78 @@ func MetricsHandlerGetJSON(memStor *storage.MemoryStorage) http.HandlerFunc {
 	}
 }
 
-func ChiRouter(memStor *storage.MemoryStorage, sLogger *zap.SugaredLogger) *chi.Mux {
+func logging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		start := time.Now()
+
+		lw := logger.NewResponceWriterWithLogging(w)
+		sLogger := logger.NewLogger()
+
+		next.ServeHTTP(lw, r) // servicing the original request
+		duration := time.Since(start)
+
+		//send request information to zap
+		sLogger.Infoln(
+			"\033[93m"+"uri", r.RequestURI+"\033[0m",
+			"\033[96m"+"method", r.Method+"\033[0m",
+			"\033[32m"+"duration", duration.String()+"\033[0m",
+			"\033[36m"+"status", lw.ResponseData.Status,
+			"size", lw.ResponseData.Size,
+			"\033[0m",
+		)
+	})
+}
+
+
+func gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ow := w
+
+		//Server responce
+		//some checks
+		contentType := r.Header.Get("Content-Type")
+		supportsType := strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json")
+		acceptEncoding := r.Header.Get("Accept-Encoding")
+		supportsGzip := strings.Contains(acceptEncoding, "gzip")
+		if supportsGzip && supportsType && r.Method == "POST"  { //r.Method == "POST" for normal open GET-Request via browser (without gzip compress)
+			// compress http.ResponseWriter
+			cw := gzip.NewCompressWriter(w)
+			ow = cw
+			defer cw.Close()
+		}
+
+		//Client request
+		//check client data in gzip format
+		contentEncoding := r.Header.Get("Content-Encoding")
+		sendsGzip := strings.Contains(contentEncoding, "gzip")
+		if sendsGzip {
+			//decompress r.Body
+			cr, err := gzip.NewCompressReader(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			r.Body = cr
+			defer cr.Close()
+		}
+		next.ServeHTTP(ow, r)
+	})
+}
+
+func ChiRouter(memStor *storage.MemoryStorage) *chi.Mux {
 	r := chi.NewRouter()
 
-	logging := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	//this chi function do all handmade work in stock! //r.Use(middleware.Compress(5))
+	r.Use(gzipMiddleware)
 
-			start := time.Now()
-
-			lw := logger.NewResponceWriterWithLogging(w)
-
-			next.ServeHTTP(lw, r) // servicing the original request
-			duration := time.Since(start)
-
-			//send request information to zap
-			sLogger.Infoln(
-				"\033[93m"+"uri", r.RequestURI+"\033[0m",
-				"\033[96m"+"method", r.Method+"\033[0m",
-				"\033[32m"+"duration", duration.String()+"\033[0m",
-				"\033[36m"+"status", lw.ResponseData.Status,
-				"size", lw.ResponseData.Size,
-				"\033[0m",
-			)
-		})
-	}
-
+	//this chi function do all handmade work in stock! //r.Use(middleware.Logger)
 	r.With(logging).Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))
 	r.With(logging).Get("/value/{mtype}/{mname}", MetricsHandlerGet(memStor))
 	r.With(logging).Get("/", MetricsHandlerGetAll(memStor))
 
-	r.Post("/value/", MetricsHandlerGetJSON(memStor))
-	r.Post("/update/", MetricsHandlerPostJSON(memStor))
+	r.With(logging).Post("/value/", MetricsHandlerGetJSON(memStor))
+	r.With(logging).Post("/update/", MetricsHandlerPostJSON(memStor))
 
 	return r
 }

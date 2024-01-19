@@ -2,7 +2,7 @@ package agwork
 
 import (
 	"bytes"
-	"encoding/json"
+
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/impr0ver/metrics-service/internal/agmemory"
+	"github.com/impr0ver/metrics-service/internal/gzip"
 )
 
 func SetMetrics(metrics *agmemory.AgMemory, mu *sync.Mutex) {
@@ -70,6 +71,7 @@ func SendMetrics(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval int, 
 	for key, value := range metricData {
 
 		fullGaugeURL := fmt.Sprintf("http://%s/update/gauge/%s/%.2f", URL, key, value)
+
 		resp, err := http.Post(fullGaugeURL, "text/plain", nil)
 		if err != nil {
 			fmt.Println(err)
@@ -101,16 +103,17 @@ func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval i
 		agMetrics.Value = (*float64)(&value)
 		agMetrics.MType = "gauge"
 		agMetrics.ID = key
+
 		buff := new(bytes.Buffer)
+		gzip.CompressJSON(buff, agMetrics)
 
-		json.NewEncoder(buff).Encode(agMetrics)
-
-		resp, err := http.Post(fullURL, "application/json", buff)
+		res, err := sendRequest(http.MethodPost, "application/json", fullURL, buff)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		resp.Body.Close()
+
+		res.Body.Close()
 	}
 	//prepare and send counter
 	agMetrics.ID = "PollCount"
@@ -119,13 +122,31 @@ func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval i
 	agMetrics.Delta = (*int64)(&pollCount)
 
 	buff := new(bytes.Buffer)
+	gzip.CompressJSON(buff, agMetrics)
 
-	json.NewEncoder(buff).Encode(agMetrics)
-
-	resp, err := http.Post(fullURL, "application/json", buff)
+	res, err := sendRequest(http.MethodPost, "application/json", fullURL, buff)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	resp.Body.Close()
+	res.Body.Close()
+}
+
+func sendRequest(method, contentType, url string, body *bytes.Buffer) (*http.Response, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Add("Content-Encoding", "gzip")
+
+	client := &http.Client{}
+	res, err := client.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	return res, nil
 }

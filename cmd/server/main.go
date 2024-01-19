@@ -37,8 +37,8 @@ func main() {
 	InitConfig(&cfg)
 	var sLogger = logger.NewLogger()
 
-	r := handlers.ChiRouter(memStor, sLogger)
+	r := handlers.ChiRouter(memStor)
 
-	sLogger.Info("Server is listening...")//log.Println("Server is listening...")
-	sLogger.Fatal(http.ListenAndServe(cfg.Address, r))//log.Fatal(http.ListenAndServe(cfg.Address, r))
+	sLogger.Info("Server is listening...")
+	sLogger.Fatal(http.ListenAndServe(cfg.Address, r))
 }
