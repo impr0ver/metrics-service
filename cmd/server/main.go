@@ -34,7 +34,7 @@ func main() {
 	}()
 
 	httpServer := &http.Server{
-		Addr:    cfg.Address,
+		Addr:    cfg.ListenAddr,
 		Handler: r,
 	}
 

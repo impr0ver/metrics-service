@@ -64,7 +64,7 @@ func NewConfig() (c Config) {
 
 // /////
 type Config struct {
-	Address       string        `env:"ADDRESS"`
+	ListenAddr    string        `env:"ADDRESS"`
 	StoreInterval time.Duration `env:"STORE_INTERVAL"`
 	StoreFile     string        `env:"FILE_STORAGE_PATH"`
 	Restore       bool          `env:"RESTORE"`
@@ -77,7 +77,7 @@ func InitConfig() Config {
 		log.Fatal(err)
 	}
 
-	flag.StringVar(&cfg.Address, "a", "localhost:8080", "Server address and port.")
+	flag.StringVar(&cfg.ListenAddr, "a", "localhost:8080", "Server address and port.")
 	flag.DurationVar(&cfg.StoreInterval, "i", 300*time.Second, "Write store interval")
 	flag.StringVar(&cfg.StoreFile, "f", "/tmp/metrics-db.json", "Path to store file")
 	flag.BoolVar(&cfg.Restore, "r", true, "Restore server metrics flag")
@@ -85,7 +85,7 @@ func InitConfig() Config {
 	flag.Parse()
 
 	if envAddr := os.Getenv("ADDRESS"); envAddr != "" {
-		cfg.Address = envAddr
+		cfg.ListenAddr = envAddr
 	}
 	if envDuration := os.Getenv("STORE_INTERVAL"); envDuration != "" {
 		cfg.StoreInterval, err = time.ParseDuration(envDuration)
