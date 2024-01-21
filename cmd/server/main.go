@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/impr0ver/metrics-service/internal/handlers"
 	"github.com/impr0ver/metrics-service/internal/logger"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -17,10 +22,7 @@ func main() {
 
 	r := handlers.ChiRouter(memStor)
 
-	sLogger.Info("Server is listening...")
-	sLogger.Fatal(http.ListenAndServe(cfg.Address, r))
-
-	/*ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
 		c := make(chan os.Signal, 1) // we need to reserve to buffer size 1, so the notifier are not blocked
@@ -47,7 +49,7 @@ func main() {
 
 	if err := g.Wait(); err != nil {
 		sLogger.Info("exit reason: %s \n", err)
-	}*/
+	}
 
 	fmt.Println("Store metrics in file...")
 	storage.StoreToFile(memStor, cfg.StoreFile)

@@ -25,7 +25,7 @@ func InitConfig() *Config {
 		log.Fatal(err)
 	}
 
-	flag.StringVar(&cfg.Address, "a", "localhost:8080", "Server address and port.")
+	flag.StringVar(&cfg.Address, "a", "127.0.0.1:8080", "Server address and port.")
 	flag.DurationVar(&cfg.StoreInterval, "i", 300*time.Second, "Write store interval")
 	flag.StringVar(&cfg.StoreFile, "f", "/tmp/metrics-db.json", "Path to store file")
 	flag.BoolVar(&cfg.Restore, "r", true, "Restore server metrics flag")
