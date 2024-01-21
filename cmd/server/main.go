@@ -16,8 +16,8 @@ import (
 )
 
 func main() {
-	var cfg = servconfig.InitConfig()
-	//cfg := servconfig.NewConfig()
+	//var cfg = servconfig.InitConfig()
+	cfg := servconfig.NewConfig()
 	var memStor = storage.NewMemoryStorage(&cfg)
 	var sLogger = logger.NewLogger()
 

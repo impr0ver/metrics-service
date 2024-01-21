@@ -2,17 +2,13 @@ package servconfig
 
 import (
 	"flag"
-	"log"
 	"os"
 	"strconv"
 	"time"
-
-	"github.com/caarlos0/env/v6"
 )
 
-/*
 const (
-	DefaultListenAddr    = "127.0.0.1:8080"
+	DefaultListenAddr    = "localhost:8080"
 	DefaultStoreInterval = 300 * time.Second
 	DefaultStoreFile     = "/tmp/metrics-db.json"
 	RestoreTrue          = true
@@ -25,7 +21,7 @@ type Config struct {
 	Restore       bool
 }
 
-func SetUpConfig(cfg *Config) {
+func InitConfig(cfg *Config) {
 	var err error
 
 	if v, ok := os.LookupEnv("ADDRESS"); ok {
@@ -37,7 +33,7 @@ func SetUpConfig(cfg *Config) {
 			cfg.StoreInterval = DefaultStoreInterval
 		}
 	}
-	if v, ok := os.LookupEnv("STORE_FILE"); ok {
+	if v, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
 		cfg.StoreFile = v
 	}
 	if v, ok := os.LookupEnv("RESTORE"); ok {
@@ -48,7 +44,7 @@ func SetUpConfig(cfg *Config) {
 	}
 }
 
-func SetUpFlag(cfg *Config) {
+func InitFlags(cfg *Config) {
 	flag.StringVar(&cfg.ListenAddr, "a", DefaultListenAddr, "Server address and port")
 	flag.DurationVar(&cfg.StoreInterval, "i", DefaultStoreInterval, "Write store interval")
 	flag.StringVar(&cfg.StoreFile, "f", DefaultStoreFile, "Path to store file")
@@ -56,17 +52,18 @@ func SetUpFlag(cfg *Config) {
 }
 
 func NewConfig() (c Config) {
-	SetUpFlag(&c)
+	InitFlags(&c)
 	flag.Parse()
-	SetUpConfig(&c)
+	InitConfig(&c)
 	return
-}*/
+}
 
-// /////
+//////////////////
+/*
 type Config struct {
 	ListenAddr    string        `env:"ADDRESS"`
 	StoreInterval time.Duration `env:"STORE_INTERVAL"`
-	StoreFile     string        `env:"STORE_FILE"`
+	StoreFile     string        `env:"FILE_STORAGE_PATH"`
 	Restore       bool          `env:"RESTORE"`
 }
 
@@ -93,7 +90,7 @@ func InitConfig() Config {
 			cfg.StoreInterval = 300 * time.Second
 		}
 	}
-	if envStorPath := os.Getenv("STORE_FILE"); envStorPath != "" {
+	if envStorPath := os.Getenv("FILE_STORAGE_PATH"); envStorPath != "" {
 		cfg.StoreFile = envStorPath
 	}
 	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
@@ -104,4 +101,4 @@ func InitConfig() Config {
 	}
 
 	return cfg
-}
+}*/
