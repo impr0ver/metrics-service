@@ -2,11 +2,15 @@ package servconfig
 
 import (
 	"flag"
+	"log"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/caarlos0/env/v6"
 )
 
+/*
 const (
 	DefaultListenAddr    = "127.0.0.1:8080"
 	DefaultStoreInterval = 300 * time.Second
@@ -19,7 +23,6 @@ type Config struct {
 	StoreInterval time.Duration
 	StoreFile     string
 	Restore       bool
-	Key           string
 }
 
 func SetUpConfig(cfg *Config) {
@@ -52,22 +55,22 @@ func SetUpFlag(cfg *Config) {
 	flag.BoolVar(&cfg.Restore, "r", RestoreTrue, "Restore server metrics flag")
 }
 
-func New() (c Config) {
+func NewConfig() (c Config) {
 	SetUpFlag(&c)
 	flag.Parse()
 	SetUpConfig(&c)
 	return
-}
+}*/
 
-///////
-/*type Config struct {
+// /////
+type Config struct {
 	Address       string        `env:"ADDRESS"`
 	StoreInterval time.Duration `env:"STORE_INTERVAL"`
 	StoreFile     string        `env:"FILE_STORAGE_PATH"`
 	Restore       bool          `env:"RESTORE"`
 }
 
-func InitConfig() *Config {
+func InitConfig() Config {
 	var cfg Config
 	err := env.Parse(&cfg)
 	if err != nil {
@@ -100,6 +103,5 @@ func InitConfig() *Config {
 		}
 	}
 
-	return &cfg
+	return cfg
 }
-*/

@@ -16,8 +16,8 @@ import (
 )
 
 func main() {
-	//var cfg = servconfig.InitConfig()
-	cfg := servconfig.New()
+	var cfg = servconfig.InitConfig()
+	//cfg := servconfig.NewConfig()
 	var memStor = storage.NewMemoryStorage(&cfg)
 	var sLogger = logger.NewLogger()
 
@@ -34,7 +34,7 @@ func main() {
 	}()
 
 	httpServer := &http.Server{
-		Addr:    cfg.ListenAddr,
+		Addr:    cfg.Address,
 		Handler: r,
 	}
 
