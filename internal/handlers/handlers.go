@@ -26,7 +26,6 @@ const (
 	gauge   = "gauge"
 )
 
-
 func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -45,9 +44,9 @@ func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFun
 				w.Write([]byte("Bad request!"))
 				return
 			}
-			
+
 			memStor.AddNewCounter(metricName, storage.Counter(counterValue))
-			
+
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Registered successfully!"))
@@ -60,9 +59,9 @@ func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFun
 				w.Write([]byte("Bad request!"))
 				return
 			}
-			
+
 			memStor.UpdateGauge(metricName, storage.Gauge(gaugeValue))
-			
+
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Registered successfully!"))
@@ -175,6 +174,7 @@ func checkErrors(err error, httpStatus int, w http.ResponseWriter) bool {
 		}{Error: err.Error()}
 
 		msgbytes, _ := json.Marshal(errMessage)
+		
 		w.WriteHeader(httpStatus)
 		w.Write(msgbytes)
 		return true
@@ -185,7 +185,7 @@ func checkErrors(err error, httpStatus int, w http.ResponseWriter) bool {
 func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Type", "application/json")
 
 		var metric storage.Metrics
 		err := json.NewDecoder(r.Body).Decode(&metric)
@@ -208,7 +208,7 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 			}
 			memStor.AddNewCounter(metric.ID, storage.Counter(*metric.Delta))
 			realVal, err := memStor.GetCounterByKey(metric.ID)
-			if checkErrors(err, http.StatusInternalServerError, w) {
+			if checkErrors(err, http.StatusNotFound, w) {
 				return
 			}
 			metric.Delta = (*int64)(&realVal)
@@ -220,7 +220,7 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 			}
 			memStor.UpdateGauge(metric.ID, storage.Gauge(*metric.Value))
 			realVal, err := memStor.GetGaugeByKey(metric.ID)
-			if checkErrors(err, http.StatusInternalServerError, w) {
+			if checkErrors(err, http.StatusNotFound, w) {
 				return
 			}
 			metric.Value = (*float64)(&realVal)
@@ -242,28 +242,18 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		errParse := func(err error, httpStatus int) bool {
-			if err != nil {
-				msgbytes, _ := json.Marshal(err.Error())
-				w.WriteHeader(httpStatus)
-				w.Write(msgbytes)
-				return true
-			}
-			return false
-		}
+		w.Header().Set("Content-Type", "application/json")
 
 		var metric storage.Metrics
 		err := json.NewDecoder(r.Body).Decode(&metric)
-		if errParse(err, http.StatusBadRequest) {
+		if checkErrors(err, http.StatusBadRequest, w) {
 			return
 		}
 
 		switch metric.MType {
 		case counter:
 			realValue, err := memStor.GetCounterByKey(metric.ID)
-			if errParse(err, http.StatusNotFound) {
+			if checkErrors(err, http.StatusNotFound, w) {
 				return
 			}
 			metric.Delta = (*int64)(&realValue)
@@ -271,19 +261,19 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 
 		case gauge:
 			realValue, err := memStor.GetGaugeByKey(metric.ID)
-			if errParse(err, http.StatusNotFound) {
+			if checkErrors(err, http.StatusNotFound, w) {
 				return
 			}
 			metric.Value = (*float64)(&realValue)
 			metric.Delta = nil
 
 		default:
-			errParse(errors.New("unsupported metric type"), http.StatusBadRequest)
+			checkErrors(errors.New("unsupported metric type"), http.StatusBadRequest, w)
 			return
 		}
 
 		answer, err := json.Marshal(metric)
-		if errParse(err, http.StatusInternalServerError) {
+		if checkErrors(err, http.StatusInternalServerError, w) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -324,7 +314,7 @@ func gzipMiddleware(next http.Handler) http.Handler {
 		supportsType := strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json")
 		acceptEncoding := r.Header.Get("Accept-Encoding")
 		supportsGzip := strings.Contains(acceptEncoding, "gzip")
-		if supportsGzip && supportsType { 
+		if supportsGzip && supportsType {
 			// compress http.ResponseWriter
 			cw := gzip.NewCompressWriter(w)
 			ow = cw
