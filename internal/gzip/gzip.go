@@ -15,12 +15,6 @@ func CompressJSON(w io.Writer, i interface{}) error {
 	return gz.Close()
 }
 
-/*func CompressTextHTML(w io.Writer, i interface{}) error {
-	var buf bytes.Buffer
-	gz := gzip.NewWriter(&buf)
-	gz.Write(myJSON)
-	gz.Close()
-}*/
 
 func CompressTextHTML(w io.Writer) *gzip.Writer {
 	gz := gzip.NewWriter(w)

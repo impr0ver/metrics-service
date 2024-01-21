@@ -26,7 +26,8 @@ const (
 	gauge   = "gauge"
 )
 
-func MetricsHandlerPost(memStor *storage.MemoryStorage) http.HandlerFunc {
+
+func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		metricType := chi.URLParam(r, mType)
@@ -44,12 +45,9 @@ func MetricsHandlerPost(memStor *storage.MemoryStorage) http.HandlerFunc {
 				w.Write([]byte("Bad request!"))
 				return
 			}
-			_, found := memStor.Counters[metricName]
-			if found {
-				memStor.Counters[metricName] += storage.Counter(counterValue)
-			} else {
-				memStor.Counters[metricName] = storage.Counter(counterValue)
-			}
+			
+			memStor.AddNewCounter(metricName, storage.Counter(counterValue))
+			
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Registered successfully!"))
@@ -62,7 +60,9 @@ func MetricsHandlerPost(memStor *storage.MemoryStorage) http.HandlerFunc {
 				w.Write([]byte("Bad request!"))
 				return
 			}
-			memStor.Gauges[metricName] = storage.Gauge(gaugeValue)
+			
+			memStor.UpdateGauge(metricName, storage.Gauge(gaugeValue))
+			
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Registered successfully!"))
@@ -75,7 +75,7 @@ func MetricsHandlerPost(memStor *storage.MemoryStorage) http.HandlerFunc {
 	}
 }
 
-func MetricsHandlerGet(memStor *storage.MemoryStorage) http.HandlerFunc {
+func MetricsHandlerGet(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		metricType := chi.URLParam(r, mType)
@@ -111,7 +111,7 @@ func MetricsHandlerGet(memStor *storage.MemoryStorage) http.HandlerFunc {
 	}
 }
 
-func MetricsHandlerGetAll(memStor *storage.MemoryStorage) http.HandlerFunc {
+func MetricsHandlerGetAll(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 
 	const tmplHTML = `
 <html>
@@ -159,7 +159,6 @@ func MetricsHandlerGetAll(memStor *storage.MemoryStorage) http.HandlerFunc {
 		})
 		pContent.AllMetrics = allMetrics
 
-
 		gz := gzip.CompressTextHTML(w)
 		defer gz.Close()
 		w.Header().Set("Content-Type", "text/html")
@@ -183,7 +182,7 @@ func checkErrors(err error, httpStatus int, w http.ResponseWriter) bool {
 	return false
 }
 
-func MetricsHandlerPostJSON(memStor *storage.MemoryStorage) http.HandlerFunc {
+func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -240,7 +239,7 @@ func MetricsHandlerPostJSON(memStor *storage.MemoryStorage) http.HandlerFunc {
 	}
 }
 
-func MetricsHandlerGetJSON(memStor *storage.MemoryStorage) http.HandlerFunc {
+func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -325,7 +324,7 @@ func gzipMiddleware(next http.Handler) http.Handler {
 		supportsType := strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json")
 		acceptEncoding := r.Header.Get("Accept-Encoding")
 		supportsGzip := strings.Contains(acceptEncoding, "gzip")
-		if supportsGzip && supportsType { //&& r.Method == "POST" for normal open GET-Request via browser (without gzip compress)
+		if supportsGzip && supportsType { 
 			// compress http.ResponseWriter
 			cw := gzip.NewCompressWriter(w)
 			ow = cw
@@ -350,7 +349,7 @@ func gzipMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func ChiRouter(memStor *storage.MemoryStorage) *chi.Mux {
+func ChiRouter(memStor storage.MemoryStoragerInterface) *chi.Mux {
 	r := chi.NewRouter()
 
 	//this chi function do all handmade work in stock! //r.Use(middleware.Compress(5))
@@ -360,7 +359,6 @@ func ChiRouter(memStor *storage.MemoryStorage) *chi.Mux {
 	r.With(logging).Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))
 	r.With(logging).Get("/value/{mtype}/{mname}", MetricsHandlerGet(memStor))
 	r.With(logging).Get("/", MetricsHandlerGetAll(memStor))
-
 	r.With(logging).Post("/value/", MetricsHandlerGetJSON(memStor))
 	r.With(logging).Post("/update/", MetricsHandlerPostJSON(memStor))
 
