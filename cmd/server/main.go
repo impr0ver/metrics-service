@@ -51,6 +51,8 @@ func main() {
 		sLogger.Info("exit reason: %s \n", err)
 	}
 
-	fmt.Println("Store metrics in file...")
-	storage.StoreToFile(memStor, cfg.StoreFile)
+	if cfg.StoreFile != "" {
+		fmt.Println("Store metrics in file...")
+		storage.StoreToFile(memStor, cfg.StoreFile)
+	}
 }

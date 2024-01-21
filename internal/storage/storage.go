@@ -28,7 +28,7 @@ func NewMemoryStorage(cfg *servconfig.Config) MemoryStoragerInterface {
 	if cfg.Restore {
 		err := RestoreFromFile(memStor, cfg.StoreFile)
 		if err != nil {
-			sLogger.Error("error restore storage from file, %s\n", err.Error())
+			sLogger.Info("Restoring from a file is impossible, because file does not exist!\n")
 		}
 	}
 
