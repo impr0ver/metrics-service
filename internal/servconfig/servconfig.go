@@ -19,7 +19,6 @@ type Config struct {
 
 func InitConfig() *Config {
 	var cfg Config
-
 	err := env.Parse(&cfg)
 	if err != nil {
 		log.Fatal(err)
@@ -27,7 +26,7 @@ func InitConfig() *Config {
 
 	flag.StringVar(&cfg.Address, "a", "localhost:8080", "Server address and port.")
 	flag.DurationVar(&cfg.StoreInterval, "i", 300*time.Second, "Write store interval")
-	flag.StringVar(&cfg.StoreFile, "f", "metrics-db.json", "Path to store file")
+	flag.StringVar(&cfg.StoreFile, "f", "/tmp/metrics-db.json", "Path to store file")
 	flag.BoolVar(&cfg.Restore, "r", true, "Restore server metrics flag")
 
 	flag.Parse()

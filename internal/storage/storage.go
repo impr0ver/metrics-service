@@ -32,10 +32,12 @@ func NewMemoryStorage(cfg *servconfig.Config) MemoryStoragerInterface {
 		}
 	}
 
-	if cfg.StoreInterval > 0 {
-		RunStoreToFileRoutine(memStor, cfg.StoreFile, cfg.StoreInterval)
-	} else { //Sync
-		memStor = &SyncFileWithMemoryStorager{MemoryStoragerInterface: memStor, FilePath: cfg.StoreFile}
+	if cfg.StoreFile != "" {
+		if cfg.StoreInterval > 0 {
+			RunStoreToFileRoutine(memStor, cfg.StoreFile, cfg.StoreInterval)
+		} else { //Sync
+			memStor = &SyncFileWithMemoryStorager{MemoryStoragerInterface: memStor, FilePath: cfg.StoreFile}
+		}
 	}
 
 	return memStor
@@ -46,13 +48,13 @@ type SyncFileWithMemoryStorager struct {
 	FilePath string `json:"-"`
 }
 
-//add StoreToFile with AddNewCounter - sync mode if i set 0
+// add StoreToFile with AddNewCounter - sync mode if i set 0
 func (s *SyncFileWithMemoryStorager) AddNewCounter(k string, c Counter) {
 	s.MemoryStoragerInterface.AddNewCounter(k, c)
 	StoreToFile(s, s.FilePath)
 }
 
-//add StoreToFile with UpdateGauge - sync mode if i set 0
+// add StoreToFile with UpdateGauge - sync mode if i set 0
 func (s *SyncFileWithMemoryStorager) UpdateGauge(k string, g Gauge) {
 	s.MemoryStoragerInterface.UpdateGauge(k, g)
 	StoreToFile(s, s.FilePath)
@@ -132,8 +134,7 @@ func (st *MemoryStorage) UpdateGauge(key string, value Gauge) {
 	st.Gauges[key] = value
 }
 
-
-//operations with file (store data in file)
+// operations with file (store data in file)
 func RestoreFromFile(memStor MemoryStoragerInterface, filePath string) error {
 	fm, err := os.Open(filePath)
 	if err != nil {
@@ -160,8 +161,6 @@ func RunStoreToFileRoutine(memStor MemoryStoragerInterface, filePath string, sto
 		}
 	}()
 }
-
-
 
 // handler template/html storage
 type Pagecontent struct {
