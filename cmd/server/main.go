@@ -16,8 +16,9 @@ import (
 )
 
 func main() {
-	var cfg = servconfig.InitConfig()
-	var memStor = storage.NewMemoryStorage(cfg)
+	//var cfg = servconfig.InitConfig()
+	cfg := servconfig.New()
+	var memStor = storage.NewMemoryStorage(&cfg)
 	var sLogger = logger.NewLogger()
 
 	r := handlers.ChiRouter(memStor)
@@ -33,7 +34,7 @@ func main() {
 	}()
 
 	httpServer := &http.Server{
-		Addr:    cfg.Address,
+		Addr:    cfg.ListenAddr,
 		Handler: r,
 	}
 
@@ -48,7 +49,7 @@ func main() {
 	})
 
 	if err := g.Wait(); err != nil {
-		sLogger.Info("exit reason: %s \n", err)
+		sLogger.Infof ("Exit reason: %v \n", err)
 	}
 
 	if cfg.StoreFile != "" {

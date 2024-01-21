@@ -2,15 +2,65 @@ package servconfig
 
 import (
 	"flag"
-	"log"
 	"os"
 	"strconv"
 	"time"
+)
 
-	"github.com/caarlos0/env/v6"
+const (
+	DefaultListenAddr    = "127.0.0.1:8080"
+	DefaultStoreInterval = 300 * time.Second
+	DefaultStoreFile     = "/tmp/metrics-db.json"
+	RestoreTrue          = true
 )
 
 type Config struct {
+	ListenAddr    string
+	StoreInterval time.Duration
+	StoreFile     string
+	Restore       bool
+	Key           string
+}
+
+func SetUpConfig(cfg *Config) {
+	var err error
+
+	if v, ok := os.LookupEnv("ADDRESS"); ok {
+		cfg.ListenAddr = v
+	}
+	if v, ok := os.LookupEnv("STORE_INTERVAL"); ok {
+		cfg.StoreInterval, err = time.ParseDuration(v)
+		if err != nil {
+			cfg.StoreInterval = DefaultStoreInterval
+		}
+	}
+	if v, ok := os.LookupEnv("STORE_FILE"); ok {
+		cfg.StoreFile = v
+	}
+	if v, ok := os.LookupEnv("RESTORE"); ok {
+		cfg.Restore, err = strconv.ParseBool(v)
+		if err != nil {
+			cfg.Restore = RestoreTrue
+		}
+	}
+}
+
+func SetUpFlag(cfg *Config) {
+	flag.StringVar(&cfg.ListenAddr, "a", DefaultListenAddr, "Server address and port")
+	flag.DurationVar(&cfg.StoreInterval, "i", DefaultStoreInterval, "Write store interval")
+	flag.StringVar(&cfg.StoreFile, "f", DefaultStoreFile, "Path to store file")
+	flag.BoolVar(&cfg.Restore, "r", RestoreTrue, "Restore server metrics flag")
+}
+
+func New() (c Config) {
+	SetUpFlag(&c)
+	flag.Parse()
+	SetUpConfig(&c)
+	return
+}
+
+///////
+/*type Config struct {
 	Address       string        `env:"ADDRESS"`
 	StoreInterval time.Duration `env:"STORE_INTERVAL"`
 	StoreFile     string        `env:"FILE_STORAGE_PATH"`
@@ -52,3 +102,4 @@ func InitConfig() *Config {
 
 	return &cfg
 }
+*/
