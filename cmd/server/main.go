@@ -18,17 +18,15 @@ import (
 func main() {
 	var cfg = servconfig.InitConfig()
 	var memStor = storage.NewMemoryStorage(cfg)
-	//var memStor storage.MemoryStoragerInterface = storage.NewMemoryStorage(cfg)
 	var sLogger = logger.NewLogger()
 	
 	r := handlers.ChiRouter(memStor)
-	//r := handlers.ChiRouter(&memStor)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
 		c := make(chan os.Signal, 1) // we need to reserve to buffer size 1, so the notifier are not blocked
-		signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM/*, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT*/)
 
 		<-c
 		cancel()

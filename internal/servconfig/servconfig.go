@@ -19,7 +19,7 @@ type Config struct {
 
 func InitConfig() *Config {
 	var cfg Config
-	//InitConfig(&cfg)
+
 	err := env.Parse(&cfg)
 	if err != nil {
 		log.Fatal(err)
