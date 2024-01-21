@@ -66,7 +66,7 @@ func NewConfig() (c Config) {
 type Config struct {
 	ListenAddr    string        `env:"ADDRESS"`
 	StoreInterval time.Duration `env:"STORE_INTERVAL"`
-	StoreFile     string        `env:"FILE_STORAGE_PATH"`
+	StoreFile     string        `env:"STORE_FILE"`
 	Restore       bool          `env:"RESTORE"`
 }
 
@@ -93,7 +93,7 @@ func InitConfig() Config {
 			cfg.StoreInterval = 300 * time.Second
 		}
 	}
-	if envStorPath := os.Getenv("FILE_STORAGE_PATH"); envStorPath != "" {
+	if envStorPath := os.Getenv("STORE_FILE"); envStorPath != "" {
 		cfg.StoreFile = envStorPath
 	}
 	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
