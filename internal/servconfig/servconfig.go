@@ -21,6 +21,40 @@ type Config struct {
 	Restore       bool
 }
 
+func ParseParameters() Config {
+	var cfg Config
+	var err error
+
+	flag.StringVar(&cfg.ListenAddr, "a", DefaultListenAddr, "Server address and port")
+	flag.DurationVar(&cfg.StoreInterval, "i", DefaultStoreInterval, "Write store interval")
+	flag.StringVar(&cfg.StoreFile, "f", DefaultStoreFile, "Path to store file")
+	flag.BoolVar(&cfg.Restore, "r", RestoreTrue, "Restore server metrics flag")
+
+	flag.Parse()
+
+	if v, ok := os.LookupEnv("ADDRESS"); ok {
+		cfg.ListenAddr = v
+	}
+	if v, ok := os.LookupEnv("STORE_INTERVAL"); ok {
+		cfg.StoreInterval, err = time.ParseDuration(v)
+		if err != nil {
+			cfg.StoreInterval = DefaultStoreInterval
+		}
+	}
+	if v, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
+		cfg.StoreFile = v
+	}
+	if v, ok := os.LookupEnv("RESTORE"); ok {
+		cfg.Restore, err = strconv.ParseBool(v)
+		if err != nil {
+			cfg.Restore = RestoreTrue
+		}
+	}
+
+	return cfg
+}
+
+/*
 func InitConfig(cfg *Config) {
 	var err error
 
@@ -57,7 +91,7 @@ func NewConfig() (c Config) {
 	InitConfig(&c)
 	return
 }
-
+*/
 //////////////////
 /*
 type Config struct {

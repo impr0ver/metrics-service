@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -20,7 +21,7 @@ type MemoryStorage struct {
 	Counters map[string]Counter
 }
 
-func NewMemoryStorage(cfg *servconfig.Config) MemoryStoragerInterface {
+func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
 	var memStor MemoryStoragerInterface
 	memStor = &MemoryStorage{Gauges: make(map[string]Gauge), Counters: make(map[string]Counter)}
 	var sLogger = logger.NewLogger()
@@ -28,13 +29,13 @@ func NewMemoryStorage(cfg *servconfig.Config) MemoryStoragerInterface {
 	if cfg.Restore {
 		err := RestoreFromFile(memStor, cfg.StoreFile)
 		if err != nil {
-			sLogger.Info("Restoring from a file is impossible, because file does not exist!\n")
+			sLogger.Infof("Warning: %v\n", err)
 		}
 	}
 
 	if cfg.StoreFile != "" {
 		if cfg.StoreInterval > 0 {
-			RunStoreToFileRoutine(memStor, cfg.StoreFile, cfg.StoreInterval)
+			RunStoreToFileRoutine(ctx, memStor, cfg.StoreFile, cfg.StoreInterval)
 		} else { //Sync
 			memStor = &SyncFileWithMemoryStorager{MemoryStoragerInterface: memStor, FilePath: cfg.StoreFile}
 		}
@@ -50,14 +51,22 @@ type SyncFileWithMemoryStorager struct {
 
 // add StoreToFile with AddNewCounter - sync mode if i set 0
 func (s *SyncFileWithMemoryStorager) AddNewCounter(k string, c Counter) {
+	var sLogger = logger.NewLogger()
 	s.MemoryStoragerInterface.AddNewCounter(k, c)
-	StoreToFile(s, s.FilePath)
+	err := StoreToFile(s, s.FilePath)
+	if err != nil {
+		sLogger.Errorf("error to save data in file: %v", err)
+	}
 }
 
 // add StoreToFile with UpdateGauge - sync mode if i set 0
 func (s *SyncFileWithMemoryStorager) UpdateGauge(k string, g Gauge) {
+	var sLogger = logger.NewLogger()
 	s.MemoryStoragerInterface.UpdateGauge(k, g)
-	StoreToFile(s, s.FilePath)
+	err := StoreToFile(s, s.FilePath)
+	if err != nil {
+		sLogger.Errorf("error to save data in file: %v", err)
+	}
 }
 
 type Metrics struct {
@@ -153,11 +162,21 @@ func StoreToFile(memStor MemoryStoragerInterface, filePath string) error {
 	return json.NewEncoder(fm).Encode(&memStor)
 }
 
-func RunStoreToFileRoutine(memStor MemoryStoragerInterface, filePath string, storeInterval time.Duration) {
+func RunStoreToFileRoutine(ctx context.Context, memStor MemoryStoragerInterface, filePath string, storeInterval time.Duration) {
+	var sLogger = logger.NewLogger()
+
 	go func() {
-		c := time.NewTicker(storeInterval).C
-		for range c {
-			StoreToFile(memStor, filePath)
+		tickerStoreToFile := time.NewTicker(storeInterval)
+		defer tickerStoreToFile.Stop()
+		for {
+			select {
+			case t := <-tickerStoreToFile.C:
+				sLogger.Infoln("Write data to file at ", t.Second())
+				StoreToFile(memStor, filePath)
+
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 }

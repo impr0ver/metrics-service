@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,14 +15,13 @@ import (
 )
 
 func main() {
-	//var cfg = servconfig.InitConfig()
-	cfg := servconfig.NewConfig()
-	var memStor = storage.NewMemoryStorage(&cfg)
+	//cfg := servconfig.NewConfig()
+	cfg := servconfig.ParseParameters()
+	ctx, cancel := context.WithCancel(context.Background())
+	var memStor = storage.NewMemoryStorage(ctx, &cfg)
 	var sLogger = logger.NewLogger()
 
 	r := handlers.ChiRouter(memStor)
-
-	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
 		c := make(chan os.Signal, 1) // we need to reserve to buffer size 1, so the notifier are not blocked
@@ -49,11 +47,14 @@ func main() {
 	})
 
 	if err := g.Wait(); err != nil {
-		sLogger.Infof ("Exit reason: %v \n", err)
+		sLogger.Infof("Exit reason: %v \n", err)
 	}
 
 	if cfg.StoreFile != "" {
-		fmt.Println("Store metrics in file...")
-		storage.StoreToFile(memStor, cfg.StoreFile)
+		sLogger.Info("Store metrics in file...")
+		err := storage.StoreToFile(memStor, cfg.StoreFile)
+		if err != nil {
+			sLogger.Errorf("error to save data in file: %v", err)
+		}
 	}
 }

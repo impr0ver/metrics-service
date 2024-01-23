@@ -168,18 +168,20 @@ func MetricsHandlerGetAll(memStor storage.MemoryStoragerInterface) http.HandlerF
 }
 
 func checkErrors(err error, httpStatus int, w http.ResponseWriter) bool {
-	if err != nil {
-		errMessage := struct {
-			Error string `json:"error"`
-		}{Error: err.Error()}
+	errMessage := struct {
+		Error string `json:"error"`
+	}{Error: err.Error()}
 
-		msgbytes, _ := json.Marshal(errMessage)
-		
-		w.WriteHeader(httpStatus)
-		w.Write(msgbytes)
-		return true
+	msgbytes, err := json.Marshal(errMessage)
+	if err != nil {
+		sLogger := logger.NewLogger()
+		sLogger.Errorf("error marshal %v", err)
+		return false
 	}
-	return false
+
+	w.WriteHeader(httpStatus)
+	w.Write(msgbytes)
+	return true
 }
 
 func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
@@ -188,16 +190,18 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 		w.Header().Set("Content-Type", "application/json")
 
 		var metric storage.Metrics
+		var sLogger = logger.NewLogger()
 		err := json.NewDecoder(r.Body).Decode(&metric)
-		if checkErrors(err, http.StatusBadRequest, w) {
+		if err != nil {
+			checkErrors(err, http.StatusBadRequest, w)
 			return
 		}
 
 		if metric.Delta != nil {
-			fmt.Println("reqMetrics", metric.MType, metric.ID, *metric.Delta)
+			sLogger.Infoln("reqMetrics", metric.MType, metric.ID, *metric.Delta)
 		}
 		if metric.Value != nil {
-			fmt.Println("reqMetrics", metric.MType, metric.ID, *metric.Value)
+			sLogger.Infoln("reqMetrics", metric.MType, metric.ID, *metric.Value)
 		}
 
 		switch metric.MType {
@@ -208,9 +212,11 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 			}
 			memStor.AddNewCounter(metric.ID, storage.Counter(*metric.Delta))
 			realVal, err := memStor.GetCounterByKey(metric.ID)
-			if checkErrors(err, http.StatusNotFound, w) {
+			if err != nil {
+				checkErrors(err, http.StatusNotFound, w)
 				return
 			}
+
 			metric.Delta = (*int64)(&realVal)
 
 		case gauge:
@@ -220,9 +226,11 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 			}
 			memStor.UpdateGauge(metric.ID, storage.Gauge(*metric.Value))
 			realVal, err := memStor.GetGaugeByKey(metric.ID)
-			if checkErrors(err, http.StatusNotFound, w) {
+			if err != nil {
+				checkErrors(err, http.StatusNotFound, w)
 				return
 			}
+
 			metric.Value = (*float64)(&realVal)
 
 		default:
@@ -231,9 +239,11 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 		}
 
 		answer, err := json.Marshal(metric)
-		if checkErrors(err, http.StatusInternalServerError, w) {
+		if err != nil {
+			checkErrors(err, http.StatusInternalServerError, w)
 			return
 		}
+
 		w.WriteHeader(http.StatusOK)
 		w.Write(answer)
 	}
@@ -246,24 +256,29 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 
 		var metric storage.Metrics
 		err := json.NewDecoder(r.Body).Decode(&metric)
-		if checkErrors(err, http.StatusBadRequest, w) {
+		if err != nil {
+			checkErrors(err, http.StatusBadRequest, w)
 			return
 		}
 
 		switch metric.MType {
 		case counter:
 			realValue, err := memStor.GetCounterByKey(metric.ID)
-			if checkErrors(err, http.StatusNotFound, w) {
+			if err != nil {
+				checkErrors(err, http.StatusNotFound, w)
 				return
 			}
+
 			metric.Delta = (*int64)(&realValue)
 			metric.Value = nil
 
 		case gauge:
 			realValue, err := memStor.GetGaugeByKey(metric.ID)
-			if checkErrors(err, http.StatusNotFound, w) {
+			if err != nil {
+				checkErrors(err, http.StatusNotFound, w)
 				return
 			}
+
 			metric.Value = (*float64)(&realValue)
 			metric.Delta = nil
 
@@ -273,9 +288,11 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 		}
 
 		answer, err := json.Marshal(metric)
-		if checkErrors(err, http.StatusInternalServerError, w) {
+		if err != nil {
+			checkErrors(err, http.StatusInternalServerError, w)
 			return
 		}
+
 		w.WriteHeader(http.StatusOK)
 		w.Write(answer)
 	}
