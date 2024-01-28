@@ -167,7 +167,7 @@ func MetricsHandlerGetAll(memStor storage.MemoryStoragerInterface) http.HandlerF
 	}
 }
 
-func checkErrors(err error, httpStatus int, w http.ResponseWriter) bool {
+func writeError(err error, httpStatus int, w http.ResponseWriter) bool {
 	errMessage := struct {
 		Error string `json:"error"`
 	}{Error: err.Error()}
@@ -193,7 +193,7 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 		var sLogger = logger.NewLogger()
 		err := json.NewDecoder(r.Body).Decode(&metric)
 		if err != nil {
-			checkErrors(err, http.StatusBadRequest, w)
+			writeError(err, http.StatusBadRequest, w)
 			return
 		}
 
@@ -207,13 +207,13 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 		switch metric.MType {
 		case counter:
 			if metric.Delta == nil {
-				checkErrors(errors.New("bad metric value"), http.StatusBadRequest, w)
+				writeError(errors.New("bad metric value"), http.StatusBadRequest, w)
 				return
 			}
 			memStor.AddNewCounter(metric.ID, storage.Counter(*metric.Delta))
 			realVal, err := memStor.GetCounterByKey(metric.ID)
 			if err != nil {
-				checkErrors(err, http.StatusNotFound, w)
+				writeError(err, http.StatusNotFound, w)
 				return
 			}
 
@@ -221,26 +221,26 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 
 		case gauge:
 			if metric.Value == nil {
-				checkErrors(errors.New("bad metric value"), http.StatusBadRequest, w)
+				writeError(errors.New("bad metric value"), http.StatusBadRequest, w)
 				return
 			}
 			memStor.UpdateGauge(metric.ID, storage.Gauge(*metric.Value))
 			realVal, err := memStor.GetGaugeByKey(metric.ID)
 			if err != nil {
-				checkErrors(err, http.StatusNotFound, w)
+				writeError(err, http.StatusNotFound, w)
 				return
 			}
 
 			metric.Value = (*float64)(&realVal)
 
 		default:
-			checkErrors(errors.New("unsupported metric type"), http.StatusBadRequest, w)
+			writeError(errors.New("unsupported metric type"), http.StatusBadRequest, w)
 			return
 		}
 
 		answer, err := json.Marshal(metric)
 		if err != nil {
-			checkErrors(err, http.StatusInternalServerError, w)
+			writeError(err, http.StatusInternalServerError, w)
 			return
 		}
 
@@ -257,7 +257,7 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 		var metric storage.Metrics
 		err := json.NewDecoder(r.Body).Decode(&metric)
 		if err != nil {
-			checkErrors(err, http.StatusBadRequest, w)
+			writeError(err, http.StatusBadRequest, w)
 			return
 		}
 
@@ -265,7 +265,7 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 		case counter:
 			realValue, err := memStor.GetCounterByKey(metric.ID)
 			if err != nil {
-				checkErrors(err, http.StatusNotFound, w)
+				writeError(err, http.StatusNotFound, w)
 				return
 			}
 
@@ -275,7 +275,7 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 		case gauge:
 			realValue, err := memStor.GetGaugeByKey(metric.ID)
 			if err != nil {
-				checkErrors(err, http.StatusNotFound, w)
+				writeError(err, http.StatusNotFound, w)
 				return
 			}
 
@@ -283,13 +283,13 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 			metric.Delta = nil
 
 		default:
-			checkErrors(errors.New("unsupported metric type"), http.StatusBadRequest, w)
+			writeError(errors.New("unsupported metric type"), http.StatusBadRequest, w)
 			return
 		}
 
 		answer, err := json.Marshal(metric)
 		if err != nil {
-			checkErrors(err, http.StatusInternalServerError, w)
+			writeError(err, http.StatusInternalServerError, w)
 			return
 		}
 
