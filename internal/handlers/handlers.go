@@ -299,13 +299,12 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 	}
 }
 
-
 func DataBasePing(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 		defer cancel()
 
-		if err :=  memStor.DBPing(ctx); err != nil {
+		if err := memStor.DBPing(ctx); err != nil {
 			writeError(err, http.StatusInternalServerError, w)
 			return
 		}
@@ -313,7 +312,6 @@ func DataBasePing(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 		w.Write([]byte("DB alive!"))
 	}
 }
-
 
 func logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

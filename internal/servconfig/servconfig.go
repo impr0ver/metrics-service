@@ -12,7 +12,7 @@ const (
 	DefaultStoreInterval = 300 * time.Second
 	DefaultStoreFile     = "/tmp/metrics-db.json"
 	RestoreTrue          = true
-	DefaultDSN           = "user=metrics password=123qwe host=localhost port=5432 dbname=metrics sslmode=disable" 
+	DefaultDSN           = "" //user=metrics password=123qwe host=localhost port=5432 dbname=metrics sslmode=disable
 )
 
 type Config struct {
