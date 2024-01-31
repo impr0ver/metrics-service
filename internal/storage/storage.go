@@ -2,7 +2,9 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -10,6 +12,9 @@ import (
 
 	"github.com/impr0ver/metrics-service/internal/logger"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
+
+	"github.com/jackc/pgx"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type Gauge float64
@@ -21,10 +26,54 @@ type MemoryStorage struct {
 	Counters map[string]Counter
 }
 
+type FileStorage struct {
+	MemoryStoragerInterface
+	FilePath string `json:"-"`
+}
+
+type DBStorage struct {
+	memStor *FileStorage
+	DB      *sql.DB
+}
+
+func (d *DBStorage) AddNewCounter(k string, c Counter) {
+	d.memStor.AddNewCounter(k, c)
+}
+
+func (d *DBStorage) GetAllCounters() map[string]Counter {
+	counters := d.memStor.GetAllCounters()
+	return counters
+}
+
+func (d *DBStorage) GetAllGauges() map[string]Gauge {
+	gauges := d.memStor.GetAllGauges()
+	return gauges
+}
+
+func (d *DBStorage) GetCounterByKey(k string) (Counter, error) {
+	counter, err := d.memStor.GetCounterByKey(k)
+	return counter, err
+}
+
+func (d *DBStorage) GetGaugeByKey(k string) (Gauge, error) {
+	gauge, err := d.memStor.GetGaugeByKey(k)
+	return gauge, err
+}
+
+func (d *DBStorage) UpdateGauge(k string, v Gauge) {
+	d.memStor.UpdateGauge(k, v)
+}
+
+func (d *DBStorage) DBPing(ctx context.Context) error {
+	err := d.DB.PingContext(ctx)
+	return err
+}
+
 func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
-	var memStor MemoryStoragerInterface
-	memStor = &MemoryStorage{Gauges: make(map[string]Gauge), Counters: make(map[string]Counter)}
 	var sLogger = logger.NewLogger()
+	var memStor MemoryStoragerInterface
+
+	memStor = &MemoryStorage{Gauges: make(map[string]Gauge), Counters: make(map[string]Counter)}
 
 	if cfg.Restore {
 		err := RestoreFromFile(memStor, cfg.StoreFile)
@@ -37,20 +86,24 @@ func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStorage
 		if cfg.StoreInterval > 0 {
 			RunStoreToFileRoutine(ctx, memStor, cfg.StoreFile, cfg.StoreInterval)
 		} else { //Sync
-			memStor = &SyncFileWithMemoryStorager{MemoryStoragerInterface: memStor, FilePath: cfg.StoreFile}
+			memStor = &FileStorage{MemoryStoragerInterface: memStor, FilePath: cfg.StoreFile}
 		}
+	}
+
+	if cfg.DatabaseDSN != "" {
+		db, err := ConnectDB(cfg.DatabaseDSN)
+		if err != nil {
+			sLogger.Fatalf("error DB: %v", err)
+		}
+		inMemStor := &FileStorage{MemoryStoragerInterface: memStor, FilePath: cfg.StoreFile}
+		memStor = &DBStorage{DB: db.DB, memStor: inMemStor}
 	}
 
 	return memStor
 }
 
-type SyncFileWithMemoryStorager struct {
-	MemoryStoragerInterface
-	FilePath string `json:"-"`
-}
-
 // add StoreToFile with AddNewCounter - sync mode if i set 0
-func (s *SyncFileWithMemoryStorager) AddNewCounter(k string, c Counter) {
+func (s *FileStorage) AddNewCounter(k string, c Counter) {
 	var sLogger = logger.NewLogger()
 	s.MemoryStoragerInterface.AddNewCounter(k, c)
 	err := StoreToFile(s, s.FilePath)
@@ -60,7 +113,7 @@ func (s *SyncFileWithMemoryStorager) AddNewCounter(k string, c Counter) {
 }
 
 // add StoreToFile with UpdateGauge - sync mode if i set 0
-func (s *SyncFileWithMemoryStorager) UpdateGauge(k string, g Gauge) {
+func (s *FileStorage) UpdateGauge(k string, g Gauge) {
 	var sLogger = logger.NewLogger()
 	s.MemoryStoragerInterface.UpdateGauge(k, g)
 	err := StoreToFile(s, s.FilePath)
@@ -85,6 +138,11 @@ type MemoryStoragerInterface interface {
 	GetCounterByKey(key string) (Counter, error)
 	GetGaugeByKey(key string) (Gauge, error)
 	UpdateGauge(key string, value Gauge)
+	DBPing(ctx context.Context) error
+}
+
+func (st *MemoryStorage) DBPing(ctx context.Context) error {
+	return errors.New("method is not implemented")
 }
 
 func (st *MemoryStorage) AddNewCounter(key string, counter Counter) {
@@ -171,7 +229,7 @@ func RunStoreToFileRoutine(ctx context.Context, memStor MemoryStoragerInterface,
 		for {
 			select {
 			case t := <-tickerStoreToFile.C:
-				sLogger.Infoln("Write data to file at ", t.Second())
+				sLogger.Infoln("Write data to file at", t.Format("15:04:05"))
 				StoreToFile(memStor, filePath)
 
 			case <-ctx.Done():
@@ -189,4 +247,24 @@ type Pagecontent struct {
 type Metric struct {
 	Name  string
 	Value string
+}
+
+//DB connect
+func ConnectDB(dsn string) (*DBStorage, error) {
+	dbs := &DBStorage{}
+
+	if err := checkDSN(dsn); err != nil {
+		return dbs, err
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, err
+	}
+	dbs.DB = db
+	return dbs, nil
+}
+
+func checkDSN(dsn string) (err error) {
+	_, err = pgx.ParseDSN(dsn)
+	return err
 }

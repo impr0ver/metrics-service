@@ -15,11 +15,10 @@ import (
 )
 
 func main() {
-	//cfg := servconfig.NewConfig()
+	var sLogger = logger.NewLogger()
 	cfg := servconfig.ParseParameters()
 	ctx, cancel := context.WithCancel(context.Background())
-	var memStor = storage.NewMemoryStorage(ctx, &cfg)
-	var sLogger = logger.NewLogger()
+	memStor := storage.NewMemoryStorage(ctx, &cfg)
 
 	r := handlers.ChiRouter(memStor)
 

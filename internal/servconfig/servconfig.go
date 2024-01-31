@@ -12,6 +12,7 @@ const (
 	DefaultStoreInterval = 300 * time.Second
 	DefaultStoreFile     = "/tmp/metrics-db.json"
 	RestoreTrue          = true
+	DefaultDSN           = "user=metrics password=123qwe host=localhost port=5432 dbname=metrics sslmode=disable" 
 )
 
 type Config struct {
@@ -19,6 +20,7 @@ type Config struct {
 	StoreInterval time.Duration
 	StoreFile     string
 	Restore       bool
+	DatabaseDSN   string
 }
 
 func ParseParameters() Config {
@@ -29,6 +31,7 @@ func ParseParameters() Config {
 	flag.DurationVar(&cfg.StoreInterval, "i", DefaultStoreInterval, "Write store interval")
 	flag.StringVar(&cfg.StoreFile, "f", DefaultStoreFile, "Path to store file")
 	flag.BoolVar(&cfg.Restore, "r", RestoreTrue, "Restore server metrics flag")
+	flag.StringVar(&cfg.DatabaseDSN, "d", DefaultDSN, "Source to DB")
 
 	flag.Parse()
 
@@ -49,6 +52,9 @@ func ParseParameters() Config {
 		if err != nil {
 			cfg.Restore = RestoreTrue
 		}
+	}
+	if v, ok := os.LookupEnv("DATABASE_DSN"); ok {
+		cfg.DatabaseDSN = v
 	}
 
 	return cfg
