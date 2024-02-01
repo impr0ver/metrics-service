@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -44,8 +45,8 @@ func TestGzipMiddleware(t *testing.T) {
 
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
-	memstorage.UpdateGauge("Alloc", 555.34)
-	memstorage.AddNewCounter("MyCounter", 95)
+	memstorage.UpdateGauge(context.TODO(), "Alloc", 555.34)
+	memstorage.AddNewCounter(context.TODO(), "MyCounter", 95)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,10 +82,10 @@ func TestGzipMiddleware(t *testing.T) {
 			assert.Equal(t, tt.want.metric, metric)
 			switch mtype := tt.want.metric.MType; mtype {
 			case "counter":
-				v, _ := memstorage.GetCounterByKey(tt.want.metric.ID)
+				v, _ := memstorage.GetCounterByKey(context.TODO(), tt.want.metric.ID)
 				assert.Equal(t, int64(v), tt.want.metric.Delta)
 			case "gauge":
-				v, _ := memstorage.GetGaugeByKey(tt.want.metric.ID)
+				v, _ := memstorage.GetGaugeByKey(context.TODO(), tt.want.metric.ID)
 				assert.Equal(t, float64(v), tt.want.metric.Value)
 			}
 		})
@@ -190,8 +191,8 @@ func TestMetricsHandlerGetJSON(t *testing.T) {
 	}
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
-	memstorage.UpdateGauge("Sys", 234.432)
-	memstorage.AddNewCounter("MyCounter", 555)
+	memstorage.UpdateGauge(context.TODO(), "Sys", 234.432)
+	memstorage.AddNewCounter(context.TODO(), "MyCounter", 555)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -226,19 +227,19 @@ func TestMetricsHandlerGet(t *testing.T) {
 		Counters: make(map[string]storage.Counter)}
 
 	//set some metrics in our storage for unit-test
-	memstorage.AddNewCounter("TstCounter", storage.Counter(345))
-	memstorage.AddNewCounter("TstCounter", storage.Counter(200))
-	memstorage.UpdateGauge("Sys", storage.Gauge(12345.1))
-	memstorage.UpdateGauge("Alloc", storage.Gauge(1764408.9))
-	memstorage.UpdateGauge("MCacheInuse", storage.Gauge(9600.000123))
-	memstorage.UpdateGauge("RandomValue", storage.Gauge(0.28))
-	memstorage.UpdateGauge("GCSys", storage.Gauge(1764408))
+	memstorage.AddNewCounter(context.TODO(), "TstCounter", storage.Counter(345))
+	memstorage.AddNewCounter(context.TODO(), "TstCounter", storage.Counter(200))
+	memstorage.UpdateGauge(context.TODO(), "Sys", storage.Gauge(12345.1))
+	memstorage.UpdateGauge(context.TODO(), "Alloc", storage.Gauge(1764408.9))
+	memstorage.UpdateGauge(context.TODO(), "MCacheInuse", storage.Gauge(9600.000123))
+	memstorage.UpdateGauge(context.TODO(), "RandomValue", storage.Gauge(0.28))
+	memstorage.UpdateGauge(context.TODO(), "GCSys", storage.Gauge(1764408))
 
-	foundSys, err := memstorage.GetGaugeByKey("Sys")
+	foundSys, err := memstorage.GetGaugeByKey(context.TODO(), "Sys")
 	if err != nil {
 		fmt.Println("err:", err)
 	}
-	foundCounter, err := memstorage.GetCounterByKey("tstcounter")
+	foundCounter, err := memstorage.GetCounterByKey(context.TODO(), "tstcounter")
 	if err != nil {
 		fmt.Println("err:", err)
 	}
@@ -276,13 +277,13 @@ func TestMetricsHandlerGetAll(t *testing.T) {
 		Counters: make(map[string]storage.Counter)}
 
 	//set some metrics in our storage for unit-test
-	memstorage.AddNewCounter("MyTstCounter", storage.Counter(100))
-	memstorage.AddNewCounter("MyTstCounter", storage.Counter(566)) //must bee "666" = 100 + 566
-	memstorage.UpdateGauge("PauseTotalNs", storage.Gauge(12345.1))
-	memstorage.UpdateGauge("MSpanSys", storage.Gauge(1764408.9))
-	memstorage.UpdateGauge("MCacheInuse", storage.Gauge(9600.000123))
-	memstorage.UpdateGauge("RandomValue", storage.Gauge(0.99))
-	memstorage.UpdateGauge("NextGC", storage.Gauge(1764408))
+	memstorage.AddNewCounter(context.TODO(), "MyTstCounter", storage.Counter(100))
+	memstorage.AddNewCounter(context.TODO(), "MyTstCounter", storage.Counter(566)) //must bee "666" = 100 + 566
+	memstorage.UpdateGauge(context.TODO(), "PauseTotalNs", storage.Gauge(12345.1))
+	memstorage.UpdateGauge(context.TODO(), "MSpanSys", storage.Gauge(1764408.9))
+	memstorage.UpdateGauge(context.TODO(), "MCacheInuse", storage.Gauge(9600.000123))
+	memstorage.UpdateGauge(context.TODO(), "RandomValue", storage.Gauge(0.99))
+	memstorage.UpdateGauge(context.TODO(), "NextGC", storage.Gauge(1764408))
 
 	//var sLogger = logger.NewLogger()
 	ts := httptest.NewServer(handlers.ChiRouter(&memstorage /*, sLogger*/))

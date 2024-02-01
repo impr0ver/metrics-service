@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"bufio"
+	"context"
 	"log"
 	"os"
 	"sync"
@@ -66,21 +67,21 @@ func TestMemory(t *testing.T) {
 
 	go func(storage *storage.MemoryStorage) {
 		for i := 0; i < 40; i++ {
-			storage.UpdateGauge(tests[i].gauge, tests[i].value)
+			storage.UpdateGauge(context.TODO(), tests[i].gauge, tests[i].value)
 		}
 		wg.Done()
 	}(&st)
 
 	go func() {
 		for i := 0; i < 10; i++ {
-			st.UpdateGauge(tests[i].gauge, tests[i].value)
+			st.UpdateGauge(context.TODO(), tests[i].gauge, tests[i].value)
 		}
 		wg.Done()
 	}()
 
 	go func(storage *storage.MemoryStorage) {
 		for i := 10; i < 20; i++ {
-			storage.UpdateGauge(tests[i].gauge, tests[i].value)
+			storage.UpdateGauge(context.TODO(), tests[i].gauge, tests[i].value)
 		}
 		wg.Done()
 	}(&st)
@@ -88,14 +89,14 @@ func TestMemory(t *testing.T) {
 	go func() {
 		for i := 20; i < 40; i++ {
 
-			st.UpdateGauge(tests[i].gauge, tests[i].value)
+			st.UpdateGauge(context.TODO(), tests[i].gauge, tests[i].value)
 		}
 		wg.Done()
 	}()
 
 	wg.Wait()
 	for _, tt := range tests {
-		value, err := st.GetGaugeByKey(tt.gauge)
+		value, err := st.GetGaugeByKey(context.TODO(), tt.gauge)
 		require.NoError(t, err)
 		assert.Equal(t, value, tt.value)
 	}
@@ -104,12 +105,12 @@ func TestMemory(t *testing.T) {
 func TestStoreToFile(t *testing.T) {
 	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge), Counters: make(map[string]storage.Counter)}
 
-	st.UpdateGauge("key1", storage.Gauge(1.1))
-	st.UpdateGauge("key2", storage.Gauge(2.22))
-	st.UpdateGauge("key3", storage.Gauge(3.333))
-	st.UpdateGauge("key4", storage.Gauge(4.4444))
-	st.AddNewCounter("Counter1", storage.Counter(100))
-	st.AddNewCounter("Counter2", storage.Counter(200))
+	st.UpdateGauge(context.TODO(), "key1", storage.Gauge(1.1))
+	st.UpdateGauge(context.TODO(), "key2", storage.Gauge(2.22))
+	st.UpdateGauge(context.TODO(), "key3", storage.Gauge(3.333))
+	st.UpdateGauge(context.TODO(), "key4", storage.Gauge(4.4444))
+	st.AddNewCounter(context.TODO(), "Counter1", storage.Counter(100))
+	st.AddNewCounter(context.TODO(), "Counter2", storage.Counter(200))
 
 	filePath := "./temp.json"
 	err := storage.StoreToFile(&st, filePath)
@@ -130,12 +131,12 @@ func TestStoreToFile(t *testing.T) {
 func TestRestoreFromFile(t *testing.T) {
 	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge), Counters: make(map[string]storage.Counter)}
 
-	st.UpdateGauge("key1", storage.Gauge(1.1))
-	st.UpdateGauge("key2", storage.Gauge(2.22))
-	st.UpdateGauge("key3", storage.Gauge(3.333))
-	st.UpdateGauge("key4", storage.Gauge(4.4444))
-	st.AddNewCounter("Counter1", storage.Counter(100))
-	st.AddNewCounter("Counter2", storage.Counter(200))
+	st.UpdateGauge(context.TODO(), "key1", storage.Gauge(1.1))
+	st.UpdateGauge(context.TODO(), "key2", storage.Gauge(2.22))
+	st.UpdateGauge(context.TODO(), "key3", storage.Gauge(3.333))
+	st.UpdateGauge(context.TODO(), "key4", storage.Gauge(4.4444))
+	st.AddNewCounter(context.TODO(), "Counter1", storage.Counter(100))
+	st.AddNewCounter(context.TODO(), "Counter2", storage.Counter(200))
 	filePath := "./temp2.json"
 	content := `{"Gauges":{"key1":1.1,"key2":2.22,"key3":3.333,"key4":4.4444},"Counters":{"Counter1":100,"Counter2":200}}`
 	fm, err := os.Create(filePath)

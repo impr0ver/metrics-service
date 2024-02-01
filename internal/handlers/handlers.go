@@ -36,6 +36,9 @@ func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFun
 
 		fmt.Println("reqMetrics", metricType, metricName, metricValue)
 
+		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		defer cancel()
+
 		switch metricType {
 		case counter:
 			counterValue, err := strconv.ParseInt(metricValue, 10, 64)
@@ -46,7 +49,7 @@ func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFun
 				return
 			}
 
-			memStor.AddNewCounter(metricName, storage.Counter(counterValue))
+			memStor.AddNewCounter(ctx, metricName, storage.Counter(counterValue))
 
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
@@ -61,7 +64,7 @@ func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFun
 				return
 			}
 
-			memStor.UpdateGauge(metricName, storage.Gauge(gaugeValue))
+			memStor.UpdateGauge(ctx, metricName, storage.Gauge(gaugeValue))
 
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
@@ -81,9 +84,12 @@ func MetricsHandlerGet(memStor storage.MemoryStoragerInterface) http.HandlerFunc
 		metricType := chi.URLParam(r, mType)
 		metricName := chi.URLParam(r, mName)
 
+		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		defer cancel()
+
 		switch metricType {
 		case counter:
-			foundValue, err := memStor.GetCounterByKey(metricName)
+			foundValue, err := memStor.GetCounterByKey(ctx, metricName)
 			if err != nil {
 				w.Header().Set("Content-Type", "text/plain")
 				w.WriteHeader(http.StatusNotFound)
@@ -93,7 +99,7 @@ func MetricsHandlerGet(memStor storage.MemoryStoragerInterface) http.HandlerFunc
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(fmt.Sprintf("%d", int(foundValue))))
 		case gauge:
-			foundValue, err := memStor.GetGaugeByKey(metricName)
+			foundValue, err := memStor.GetGaugeByKey(ctx, metricName)
 			if err != nil {
 				w.Header().Set("Content-Type", "text/plain")
 				w.WriteHeader(http.StatusNotFound)
@@ -144,8 +150,22 @@ func MetricsHandlerGetAll(memStor storage.MemoryStoragerInterface) http.HandlerF
 		var pContent storage.Pagecontent
 		var allMetrics []storage.Metric
 
-		foundCounters := memStor.GetAllCounters()
-		foundGauges := memStor.GetAllGauges()
+		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		defer cancel()
+
+		foundCounters, err := memStor.GetAllCounters(ctx)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte{})
+			return
+		}
+
+		foundGauges, err := memStor.GetAllGauges(ctx)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte{})
+			return
+		}
 
 		for name, value := range foundGauges { //range Gauge storage
 			allMetrics = append(allMetrics, storage.Metric{Name: name, Value: fmt.Sprintf("%f", value)})
@@ -205,14 +225,17 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 			sLogger.Infoln("reqMetrics", metric.MType, metric.ID, *metric.Value)
 		}
 
+		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		defer cancel()
+
 		switch metric.MType {
 		case counter:
 			if metric.Delta == nil {
 				writeError(errors.New("bad metric value"), http.StatusBadRequest, w)
 				return
 			}
-			memStor.AddNewCounter(metric.ID, storage.Counter(*metric.Delta))
-			realVal, err := memStor.GetCounterByKey(metric.ID)
+			memStor.AddNewCounter(ctx, metric.ID, storage.Counter(*metric.Delta))
+			realVal, err := memStor.GetCounterByKey(ctx, metric.ID)
 			if err != nil {
 				writeError(err, http.StatusNotFound, w)
 				return
@@ -225,8 +248,8 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 				writeError(errors.New("bad metric value"), http.StatusBadRequest, w)
 				return
 			}
-			memStor.UpdateGauge(metric.ID, storage.Gauge(*metric.Value))
-			realVal, err := memStor.GetGaugeByKey(metric.ID)
+			memStor.UpdateGauge(ctx, metric.ID, storage.Gauge(*metric.Value))
+			realVal, err := memStor.GetGaugeByKey(ctx, metric.ID)
 			if err != nil {
 				writeError(err, http.StatusNotFound, w)
 				return
@@ -262,9 +285,12 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 			return
 		}
 
+		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		defer cancel()
+
 		switch metric.MType {
 		case counter:
-			realValue, err := memStor.GetCounterByKey(metric.ID)
+			realValue, err := memStor.GetCounterByKey(ctx, metric.ID)
 			if err != nil {
 				writeError(err, http.StatusNotFound, w)
 				return
@@ -274,7 +300,7 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 			metric.Value = nil
 
 		case gauge:
-			realValue, err := memStor.GetGaugeByKey(metric.ID)
+			realValue, err := memStor.GetGaugeByKey(ctx, metric.ID)
 			if err != nil {
 				writeError(err, http.StatusNotFound, w)
 				return
@@ -301,7 +327,7 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 
 func DataBasePing(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		ctx, cancel := context.WithTimeout(r.Context(), time.Second*3)
 		defer cancel()
 
 		if err := memStor.DBPing(ctx); err != nil {

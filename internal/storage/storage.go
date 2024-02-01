@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,9 +11,6 @@ import (
 
 	"github.com/impr0ver/metrics-service/internal/logger"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
-
-	"github.com/jackc/pgx"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type Gauge float64
@@ -31,45 +27,7 @@ type FileStorage struct {
 	FilePath string `json:"-"`
 }
 
-type DBStorage struct {
-	memStor *FileStorage
-	DB      *sql.DB
-}
-
-func (d *DBStorage) AddNewCounter(k string, c Counter) {
-	d.memStor.AddNewCounter(k, c)
-}
-
-func (d *DBStorage) GetAllCounters() map[string]Counter {
-	counters := d.memStor.GetAllCounters()
-	return counters
-}
-
-func (d *DBStorage) GetAllGauges() map[string]Gauge {
-	gauges := d.memStor.GetAllGauges()
-	return gauges
-}
-
-func (d *DBStorage) GetCounterByKey(k string) (Counter, error) {
-	counter, err := d.memStor.GetCounterByKey(k)
-	return counter, err
-}
-
-func (d *DBStorage) GetGaugeByKey(k string) (Gauge, error) {
-	gauge, err := d.memStor.GetGaugeByKey(k)
-	return gauge, err
-}
-
-func (d *DBStorage) UpdateGauge(k string, v Gauge) {
-	d.memStor.UpdateGauge(k, v)
-}
-
-func (d *DBStorage) DBPing(ctx context.Context) error {
-	err := d.DB.PingContext(ctx)
-	return err
-}
-
-func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
+/*func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
 	var sLogger = logger.NewLogger()
 	var memStor MemoryStoragerInterface
 
@@ -100,26 +58,62 @@ func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStorage
 	}
 
 	return memStor
+}*/
+
+func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
+	var sLogger = logger.NewLogger()
+	var memStor MemoryStoragerInterface
+
+	if cfg.DatabaseDSN != "" { //Init memory as DB
+		db, err := ConnectDB(cfg.DatabaseDSN)
+		if err != nil {
+			sLogger.Fatalf("error DB: %v", err)
+		}
+		memStor = &DBStorage{DB: db.DB}
+		cfg.StoreFile = ""
+		cfg.Restore = false
+	} else {	//Init memory as struct in memory 
+		memStor = &MemoryStorage{Gauges: make(map[string]Gauge), Counters: make(map[string]Counter)}
+
+		if cfg.StoreFile != "" {//Init memory as file storage and struct
+			if cfg.StoreInterval > 0 {
+				RunStoreToFileRoutine(ctx, memStor, cfg.StoreFile, cfg.StoreInterval)
+			} else { 
+				memStor = &FileStorage{MemoryStoragerInterface: memStor, FilePath: cfg.StoreFile}
+			}
+		}
+		if cfg.Restore {
+			err := RestoreFromFile(memStor, cfg.StoreFile)
+			if err != nil {
+				sLogger.Infof("Warning: %v\n", err)
+			}
+		}
+	}
+	return memStor
 }
 
 // add StoreToFile with AddNewCounter - sync mode if i set 0
-func (s *FileStorage) AddNewCounter(k string, c Counter) {
+func (s *FileStorage) AddNewCounter(ctx context.Context, k string, c Counter) error {
 	var sLogger = logger.NewLogger()
-	s.MemoryStoragerInterface.AddNewCounter(k, c)
+	s.MemoryStoragerInterface.AddNewCounter(ctx, k, c)
 	err := StoreToFile(s, s.FilePath)
 	if err != nil {
 		sLogger.Errorf("error to save data in file: %v", err)
+		return err
 	}
+	return nil
 }
 
 // add StoreToFile with UpdateGauge - sync mode if i set 0
-func (s *FileStorage) UpdateGauge(k string, g Gauge) {
+func (s *FileStorage) UpdateGauge(ctx context.Context, k string, g Gauge) error {
 	var sLogger = logger.NewLogger()
-	s.MemoryStoragerInterface.UpdateGauge(k, g)
+	s.MemoryStoragerInterface.UpdateGauge(ctx, k, g)
 	err := StoreToFile(s, s.FilePath)
 	if err != nil {
 		sLogger.Errorf("error to save data in file: %v", err)
+		return err
 	}
+	return nil
 }
 
 type Metrics struct {
@@ -132,12 +126,12 @@ type Metrics struct {
 // Analog CRUD DB operations in memory
 // create Memory interface{}
 type MemoryStoragerInterface interface {
-	AddNewCounter(key string, value Counter)
-	GetAllCounters() map[string]Counter
-	GetAllGauges() map[string]Gauge
-	GetCounterByKey(key string) (Counter, error)
-	GetGaugeByKey(key string) (Gauge, error)
-	UpdateGauge(key string, value Gauge)
+	AddNewCounter(ctx context.Context, key string, value Counter) error
+	GetAllCounters(ctx context.Context) (map[string]Counter, error)
+	GetAllGauges(ctx context.Context) (map[string]Gauge, error)
+	GetCounterByKey(ctx context.Context, key string) (Counter, error)
+	GetGaugeByKey(ctx context.Context, key string) (Gauge, error)
+	UpdateGauge(ctx context.Context, key string, value Gauge) error
 	DBPing(ctx context.Context) error
 }
 
@@ -145,15 +139,16 @@ func (st *MemoryStorage) DBPing(ctx context.Context) error {
 	return errors.New("method is not implemented")
 }
 
-func (st *MemoryStorage) AddNewCounter(key string, counter Counter) {
+func (st *MemoryStorage) AddNewCounter(ctx context.Context, key string, counter Counter) error {
 	if counter != 0 {
 		st.Lock()
 		st.Counters[key] += counter
 		st.Unlock()
 	}
+	return nil
 }
 
-func (st *MemoryStorage) GetAllCounters() map[string]Counter {
+func (st *MemoryStorage) GetAllCounters(ctx context.Context) (map[string]Counter, error) {
 	st.Lock()
 	defer st.Unlock()
 
@@ -161,10 +156,10 @@ func (st *MemoryStorage) GetAllCounters() map[string]Counter {
 	for k, v := range st.Counters {
 		res[k] = v
 	}
-	return res
+	return res, nil
 }
 
-func (st *MemoryStorage) GetAllGauges() map[string]Gauge {
+func (st *MemoryStorage) GetAllGauges(ctx context.Context) (map[string]Gauge, error) {
 	st.Lock()
 	defer st.Unlock()
 
@@ -172,10 +167,10 @@ func (st *MemoryStorage) GetAllGauges() map[string]Gauge {
 	for k, v := range st.Gauges {
 		res[k] = v
 	}
-	return res
+	return res, nil
 }
 
-func (st *MemoryStorage) GetCounterByKey(key string) (Counter, error) {
+func (st *MemoryStorage) GetCounterByKey(ctx context.Context, key string) (Counter, error) {
 	st.Lock()
 	counter, ok := st.Counters[key]
 	st.Unlock()
@@ -185,7 +180,7 @@ func (st *MemoryStorage) GetCounterByKey(key string) (Counter, error) {
 	return counter, nil
 }
 
-func (st *MemoryStorage) GetGaugeByKey(key string) (Gauge, error) {
+func (st *MemoryStorage) GetGaugeByKey(ctx context.Context, key string) (Gauge, error) {
 	st.Lock()
 	gauge, ok := st.Gauges[key]
 	st.Unlock()
@@ -195,10 +190,12 @@ func (st *MemoryStorage) GetGaugeByKey(key string) (Gauge, error) {
 	return gauge, nil
 }
 
-func (st *MemoryStorage) UpdateGauge(key string, value Gauge) {
+func (st *MemoryStorage) UpdateGauge(ctx context.Context, key string, value Gauge) error {
 	st.Lock()
 	defer st.Unlock()
 	st.Gauges[key] = value
+
+	return nil
 }
 
 // operations with file (store data in file)
@@ -247,24 +244,4 @@ type Pagecontent struct {
 type Metric struct {
 	Name  string
 	Value string
-}
-
-//DB connect
-func ConnectDB(dsn string) (*DBStorage, error) {
-	dbs := &DBStorage{}
-
-	if err := checkDSN(dsn); err != nil {
-		return dbs, err
-	}
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return nil, err
-	}
-	dbs.DB = db
-	return dbs, nil
-}
-
-func checkDSN(dsn string) (err error) {
-	_, err = pgx.ParseDSN(dsn)
-	return err
 }
