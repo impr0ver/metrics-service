@@ -91,7 +91,7 @@ func main() {
 				return
 			case t := <-repIntTicker.C:
 				fmt.Println("Send data at", t.Second())
-				agwork.SendMetricsJSON(&mu, &agMemory, cfg.ReportInterval, cfg.Address) //old function agwork.SendMetrics without JSON
+				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.ReportInterval, cfg.Address) //old functions: agwork.SendMetricsJSON and agwork.SendMetrics without JSON
 			}
 		}
 	}()

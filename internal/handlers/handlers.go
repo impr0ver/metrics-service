@@ -325,6 +325,42 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 	}
 }
 
+
+func MetricsHandlerPostBatch(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var allMetrics []storage.Metrics
+
+		decData := json.NewDecoder(r.Body)
+
+		_, err := decData.Token()
+		if err != nil {
+			writeError(err, http.StatusBadRequest, w)
+			return
+		}
+		for decData.More() {
+			var metric storage.Metrics
+			err := decData.Decode(&metric)
+			if err != nil {
+				writeError(err, http.StatusBadRequest, w)
+				return
+			}
+			allMetrics = append(allMetrics, metric)
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		defer cancel()
+
+		err = memStor.AddNewMetricsAsBatch(ctx, allMetrics)
+		if err != nil {
+			writeError(err, http.StatusInternalServerError, w)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Registered successfully!"))
+	}
+}
+
+
 func DataBasePing(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second*3)
@@ -410,6 +446,8 @@ func ChiRouter(memStor storage.MemoryStoragerInterface) *chi.Mux {
 	r.With(logging).Post("/value/", MetricsHandlerGetJSON(memStor))
 	r.With(logging).Post("/update/", MetricsHandlerPostJSON(memStor))
 	r.With(logging).Get("/ping", DataBasePing(memStor))
+
+	r.With(logging).Post("/updates/", MetricsHandlerPostBatch(memStor))
 
 	return r
 }

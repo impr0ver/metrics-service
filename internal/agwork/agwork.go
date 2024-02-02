@@ -132,6 +132,46 @@ func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval i
 	res.Body.Close()
 }
 
+func SendMetricsJSONBatch(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval int, URL string) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	metricData := memory.RuntimeMetrics
+	pollCount := memory.PollCount["PollCount"]
+
+	fullURL := fmt.Sprintf("http://%s/updates/", URL)
+	var agMetrics agmemory.Metrics
+	agMetricsArray := make([]agmemory.Metrics, 0)
+
+	//prepare gauges
+	for key, value := range metricData {
+		val := new(float64)
+		*val = float64(value)
+		agMetrics.Value = val
+		agMetrics.MType = "gauge"
+		agMetrics.ID = key
+		agMetricsArray = append(agMetricsArray, agMetrics)
+	}
+
+	//prepare counter
+	agMetrics.ID = "PollCount"
+	agMetrics.MType = "counter"
+	agMetrics.Value = nil
+	agMetrics.Delta = (*int64)(&pollCount)
+
+	agMetricsArray = append(agMetricsArray, agMetrics)
+
+	buff := new(bytes.Buffer)
+	gzip.CompressJSON(buff, agMetricsArray)
+
+	res, err := sendRequest(http.MethodPost, "application/json", fullURL, buff)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	res.Body.Close()
+}
+
 func sendRequest(method, contentType, url string, body *bytes.Buffer) (*http.Response, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {

@@ -27,38 +27,6 @@ type FileStorage struct {
 	FilePath string `json:"-"`
 }
 
-/*func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
-	var sLogger = logger.NewLogger()
-	var memStor MemoryStoragerInterface
-
-	memStor = &MemoryStorage{Gauges: make(map[string]Gauge), Counters: make(map[string]Counter)}
-
-	if cfg.Restore {
-		err := RestoreFromFile(memStor, cfg.StoreFile)
-		if err != nil {
-			sLogger.Infof("Warning: %v\n", err)
-		}
-	}
-
-	if cfg.StoreFile != "" {
-		if cfg.StoreInterval > 0 {
-			RunStoreToFileRoutine(ctx, memStor, cfg.StoreFile, cfg.StoreInterval)
-		} else { //Sync
-			memStor = &FileStorage{MemoryStoragerInterface: memStor, FilePath: cfg.StoreFile}
-		}
-	}
-
-	if cfg.DatabaseDSN != "" {
-		db, err := ConnectDB(cfg.DatabaseDSN)
-		if err != nil {
-			sLogger.Fatalf("error DB: %v", err)
-		}
-		inMemStor := &FileStorage{MemoryStoragerInterface: memStor, FilePath: cfg.StoreFile}
-		memStor = &DBStorage{DB: db.DB, memStor: inMemStor}
-	}
-
-	return memStor
-}*/
 
 func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
 	var sLogger = logger.NewLogger()
@@ -133,6 +101,7 @@ type MemoryStoragerInterface interface {
 	GetGaugeByKey(ctx context.Context, key string) (Gauge, error)
 	UpdateGauge(ctx context.Context, key string, value Gauge) error
 	DBPing(ctx context.Context) error
+	AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics) error
 }
 
 func (st *MemoryStorage) DBPing(ctx context.Context) error {
@@ -197,6 +166,29 @@ func (st *MemoryStorage) UpdateGauge(ctx context.Context, key string, value Gaug
 
 	return nil
 }
+
+///
+func (st *MemoryStorage) AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics) error {
+	for _, metric := range metrics {
+		switch metric.MType {
+		case "counter":
+			err := st.AddNewCounter(ctx, metric.ID, Counter(*metric.Delta))
+			if err != nil {
+				return err
+			}
+		case "gauge":
+			err := st.UpdateGauge(ctx, metric.ID, Gauge(*metric.Value))
+			if err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported metric type")
+		}
+	}
+	return nil
+}
+
+///
 
 // operations with file (store data in file)
 func RestoreFromFile(memStor MemoryStoragerInterface, filePath string) error {
