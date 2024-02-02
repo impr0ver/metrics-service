@@ -3,7 +3,6 @@ package storage_test
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"testing"
 	"time"
 
@@ -18,28 +17,25 @@ type DBStorageTestSuite struct {
 }
 
 func (suite *DBStorageTestSuite) SetupSuite() {
-	suite.DB = &storage.DBStorage{}
+	suite.DB = &storage.DBStorage{DB: nil}
 
-	myDSN := "user=postgres password=mypassword host=localhost port=5432 dbname=metrics sslmode=disable"
+	dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
+	dbname := "testdb"
 
-	db, err := sql.Open("pgx", myDSN)
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return
 	}
 
-	dbName := "mydb"
-	db.Exec("DROP DATABASE " + dbName)
-	_, err = db.Exec("CREATE DATABASE " + dbName)
+	db.Exec("DROP DATABASE " + dbname)
+	_, err = db.Exec("CREATE DATABASE " + dbname)
 	db.Close()
 	if err != nil {
 		return
 	}
 
-	suite.DB, err = storage.ConnectDB(myDSN)
-	if err != nil {
-		fmt.Println("error in ConncetDB:", err)
-		return
-	}
+	testDSN := "postgresql://localhost:5432/" + dbname + "?user=postgres&password=postgres"
+	suite.DB, _ = storage.ConnectDB(testDSN)
 }
 
 func (suite *DBStorageTestSuite) TestDBStorageAddCounterAndGetCounter() {
@@ -190,13 +186,17 @@ func (suite *DBStorageTestSuite) TestAddNewMetricsAsBatch() {
 }
 
 func (suite *DBStorageTestSuite) SetupTest() {
-	suite.DB.DB.Exec("TRUNCATE Gauge, Counter;")
+	suite.DB.DB.Exec("TRUNCATE Gauge, Counter CASCADE;")
 }
 
 func TestDBStorageTestSuite(t *testing.T) {
-	dsn := "user=postgres password=mypassword host=localhost port=5432 dbname=metrics sslmode=disable"
+	dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
 
 	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return
+	}
+	err = db.PingContext(context.TODO())
 	if err != nil {
 		return
 	}
