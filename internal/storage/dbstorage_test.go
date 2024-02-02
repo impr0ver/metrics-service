@@ -166,7 +166,7 @@ func (suite *DBStorageTestSuite) TestAddNewMetricsAsBatch() {
 	err := suite.DB.AddNewMetricsAsBatch(ctx, metrics[:])
 	suite.NoError(err)
 
-	allCounters, err := suite.DB.GetAllCounters(context.TODO())
+	allCounters, err := suite.DB.GetAllCounters(ctx)
 	suite.NotNil(allCounters)
 	suite.NoError(err)
 	counterOne, ok := allCounters["tstMetric #1"]
@@ -176,7 +176,7 @@ func (suite *DBStorageTestSuite) TestAddNewMetricsAsBatch() {
 	suite.Equal(true, ok)
 	suite.Equal(counter2+counter3, int64(counterTwo))
 
-	allGauges, err := suite.DB.GetAllGauges(context.TODO())
+	allGauges, err := suite.DB.GetAllGauges(ctx)
 	suite.NotNil(allGauges)
 	suite.NoError(err)
 	gaugeOne, ok := allGauges["tstMetric #3"]
@@ -190,7 +190,7 @@ func (suite *DBStorageTestSuite) TestAddNewMetricsAsBatch() {
 }
 
 func (suite *DBStorageTestSuite) SetupTest() {
-	suite.DB.DB.Exec("TRUNCATE Gauge, Counter CASCADE;")
+	suite.DB.DB.Exec("TRUNCATE Gauge, Counter;")
 }
 
 func TestDBStorageTestSuite(t *testing.T) {
