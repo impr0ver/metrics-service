@@ -158,7 +158,6 @@ func SendMetricsJSONBatch(mu *sync.Mutex, memory *agmemory.AgMemory, reportInter
 	agMetrics.MType = "counter"
 	agMetrics.Value = nil
 	agMetrics.Delta = (*int64)(&pollCount)
-
 	agMetricsArray = append(agMetricsArray, agMetrics)
 
 	buff := new(bytes.Buffer)
