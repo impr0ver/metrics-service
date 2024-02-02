@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/impr0ver/metrics-service/internal/storage"
 	"github.com/stretchr/testify/suite"
@@ -150,7 +151,6 @@ func (suite *DBStorageTestSuite) TestAddNewMetricsAsBatch() {
 
 	gauge1 := float64(123.234)
 	gauge2 := float64(234.345)
-	
 
 	metrics := [5]storage.Metrics{
 		{ID: "tstMetric #1", MType: "counter", Value: nil, Delta: &counter1},
@@ -160,7 +160,10 @@ func (suite *DBStorageTestSuite) TestAddNewMetricsAsBatch() {
 		{ID: "tstMetric #4", MType: "gauge", Value: &gauge2, Delta: nil},
 	}
 
-	err := suite.DB.AddNewMetricsAsBatch(context.TODO(), metrics[:])
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := suite.DB.AddNewMetricsAsBatch(ctx, metrics[:])
 	suite.NoError(err)
 
 	allCounters, err := suite.DB.GetAllCounters(context.TODO())
@@ -184,7 +187,6 @@ func (suite *DBStorageTestSuite) TestAddNewMetricsAsBatch() {
 	suite.Equal(true, ok)
 	suite.Equal(gauge2, float64(gaugeTwo))
 
-	
 }
 
 func (suite *DBStorageTestSuite) SetupTest() {
