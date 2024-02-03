@@ -3,10 +3,13 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -19,13 +22,20 @@ func ConnectDB(dsn string) (*DBStorage, error) {
 	dbs := &DBStorage{}
 
 	if err := checkDSN(dsn); err != nil {
-		return dbs, err
+		return dbs, fmt.Errorf("wrong DSN: %w", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, err
+		return dbs, fmt.Errorf("unable connect to db: %w", err)
 	}
+
 	dbs.DB = db
+
+	err = dbs.DB.Ping()
+	if err != nil {
+		return dbs, err
+	}
+
 	err = createTables(dbs)
 
 	return dbs, err
@@ -46,21 +56,30 @@ func createTables(d *DBStorage) (err error) {
 	defer cancel()
 
 	if _, err = d.DB.ExecContext(ctx, tableCounter); err != nil {
-		return err
+		return fmt.Errorf("error create table \"Counter\": %w", err)
 	}
 	if _, err = d.DB.ExecContext(ctx, tableGauge); err != nil {
-		return err
+		return fmt.Errorf("error create table \"Gauge\": %w", err)
 	}
 	return nil
 }
 
 func (d *DBStorage) AddNewCounter(ctx context.Context, key string, value Counter) error {
-	_, err := d.DB.ExecContext(ctx, `INSERT INTO Counter (id, delta) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET delta = counter.delta + excluded.delta;`, key, int64(value))
+	_, err := d.DB.ExecContext(ctx, `INSERT INTO Counter (id, delta) VALUES ($1, $2);`, key, int64(value))
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+		_, err = d.DB.ExecContext(ctx, `UPDATE Counter SET delta = delta + $1 WHERE id = $2;`, int64(value), key)
+	}
 	return err
 }
 
 func (d *DBStorage) UpdateGauge(ctx context.Context, key string, value Gauge) error {
-	_, err := d.DB.ExecContext(ctx, `INSERT INTO Gauge (id, value) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET value = excluded.value;`, key, float64(value))
+	_, err := d.DB.ExecContext(ctx, `INSERT INTO Gauge (id, value) VALUES ($1, $2);`, key, float64(value))
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+		_, err = d.DB.ExecContext(ctx, `UPDATE Gauge SET value = $1 WHERE id = $2;`, int64(value), key)
+	}
+
 	return err
 }
 
@@ -150,7 +169,6 @@ func (d *DBStorage) AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics)
 	}
 	defer tx.Rollback()
 
-	
 	counterPrepareStatement, err := tx.PrepareContext(ctx, `INSERT INTO Counter (id, delta) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET delta = counter.delta + excluded.delta;`)
 	if err != nil {
 		return err

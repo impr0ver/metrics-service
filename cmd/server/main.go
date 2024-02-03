@@ -53,7 +53,7 @@ func main() {
 		sLogger.Info("Store metrics in file...")
 		err := storage.StoreToFile(memStor, cfg.StoreFile)
 		if err != nil {
-			sLogger.Errorf("error to save data in file: %v", err)
+			sLogger.Errorf("error to save data in file: %w", err)
 		}
 	}
 }

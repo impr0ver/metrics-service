@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 	"github.com/caarlos0/env/v6"
 	"github.com/impr0ver/metrics-service/internal/agmemory"
 	"github.com/impr0ver/metrics-service/internal/agwork"
+	"github.com/impr0ver/metrics-service/internal/logger"
 )
 
 type Config struct {
@@ -56,9 +56,9 @@ func main() {
 	var agMemory = agmemory.NewAgMemory()
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-
 	var cfg Config
 	InitConfig(&cfg)
+	var sLogger = logger.NewLogger()
 
 	pollIntTicker := time.NewTicker(time.Duration(cfg.PollInterval) * time.Second)
 	defer pollIntTicker.Stop()
@@ -76,7 +76,7 @@ func main() {
 			case <-donePollInt:
 				return
 			case t := <-pollIntTicker.C:
-				fmt.Println("Set metrics at", t.Second())
+				sLogger.Infoln("Set metrics at", t.Format("04:05"))
 				agwork.InitMetrics(&mu, &agMemory, cfg.PollInterval)
 			}
 		}
@@ -90,7 +90,7 @@ func main() {
 			case <-doneRepInt:
 				return
 			case t := <-repIntTicker.C:
-				fmt.Println("Send data at", t.Second())
+				sLogger.Infoln("Send metrics data at", t.Format("04:05"))
 				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.ReportInterval, cfg.Address) //old functions: agwork.SendMetricsJSON and agwork.SendMetrics without JSON
 			}
 		}

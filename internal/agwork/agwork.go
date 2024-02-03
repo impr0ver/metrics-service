@@ -2,6 +2,8 @@ package agwork
 
 import (
 	"bytes"
+	"errors"
+	"syscall"
 
 	"fmt"
 	"math/rand"
@@ -174,8 +176,7 @@ func SendMetricsJSONBatch(mu *sync.Mutex, memory *agmemory.AgMemory, reportInter
 func sendRequest(method, contentType, url string, body *bytes.Buffer) (*http.Response, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
-		fmt.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("error new request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", contentType)
@@ -184,8 +185,55 @@ func sendRequest(method, contentType, url string, body *bytes.Buffer) (*http.Res
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		fmt.Println(err)
-		return nil, err
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			res, err := tryToResendReq(client, req)
+			if err != nil {
+				return nil, err
+			}
+			return res, nil
+		} else {
+			return nil, fmt.Errorf("other error send data: %w", err)
+		}
 	}
 	return res, nil
+}
+
+func tryToResendReq(client *http.Client, req *http.Request) (*http.Response, error) {
+	var err error
+	var res *http.Response
+
+	for attempts := 1; attempts < 4; attempts++ {
+		//1s 3s 5s
+		switch attempts {
+		case 1:
+			Sleep("1s")
+
+			res, err = client.Do(req)
+			if err == nil {
+				return res, nil
+			}
+
+		case 2:
+			Sleep("3s")
+
+			res, err = client.Do(req)
+			if err == nil {
+				return res, nil
+			}
+		case 3:
+			Sleep("5s")
+
+			res, err = client.Do(req)
+			if err == nil {
+				return res, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("error send data after 3 attempts: %w", err)
+}
+
+func Sleep(suffix string) {
+	t, _ := time.ParseDuration(suffix)
+	fmt.Println("Try to anower resend after: ", t, ".....")
+	time.Sleep(t)
 }

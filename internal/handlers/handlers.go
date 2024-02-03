@@ -446,7 +446,6 @@ func ChiRouter(memStor storage.MemoryStoragerInterface) *chi.Mux {
 	r.With(logging).Post("/value/", MetricsHandlerGetJSON(memStor))
 	r.With(logging).Post("/update/", MetricsHandlerPostJSON(memStor))
 	r.With(logging).Get("/ping", DataBasePing(memStor))
-
 	r.With(logging).Post("/updates/", MetricsHandlerPostBatch(memStor))
 
 	return r

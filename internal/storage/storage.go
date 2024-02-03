@@ -27,7 +27,6 @@ type FileStorage struct {
 	FilePath string `json:"-"`
 }
 
-
 func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
 	var sLogger = logger.NewLogger()
 	var memStor MemoryStoragerInterface
@@ -40,13 +39,13 @@ func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStorage
 		memStor = &DBStorage{DB: db.DB}
 		cfg.StoreFile = ""
 		cfg.Restore = false
-	} else {	//Init memory as struct in memory 
+	} else { //Init memory as struct in memory
 		memStor = &MemoryStorage{Gauges: make(map[string]Gauge), Counters: make(map[string]Counter)}
 
-		if cfg.StoreFile != "" {//Init memory as file storage and struct
+		if cfg.StoreFile != "" { //Init memory as file storage and struct
 			if cfg.StoreInterval > 0 {
 				RunStoreToFileRoutine(ctx, memStor, cfg.StoreFile, cfg.StoreInterval)
-			} else { 
+			} else {
 				memStor = &FileStorage{MemoryStoragerInterface: memStor, FilePath: cfg.StoreFile}
 			}
 		}
@@ -66,7 +65,7 @@ func (s *FileStorage) AddNewCounter(ctx context.Context, k string, c Counter) er
 	s.MemoryStoragerInterface.AddNewCounter(ctx, k, c)
 	err := StoreToFile(s, s.FilePath)
 	if err != nil {
-		sLogger.Errorf("error to save data in file: %v", err)
+		sLogger.Errorf("error to save data in file: %w", err)
 		return err
 	}
 	return nil
@@ -78,7 +77,7 @@ func (s *FileStorage) UpdateGauge(ctx context.Context, k string, g Gauge) error 
 	s.MemoryStoragerInterface.UpdateGauge(ctx, k, g)
 	err := StoreToFile(s, s.FilePath)
 	if err != nil {
-		sLogger.Errorf("error to save data in file: %v", err)
+		sLogger.Errorf("error to save data in file: %w", err)
 		return err
 	}
 	return nil
@@ -167,7 +166,7 @@ func (st *MemoryStorage) UpdateGauge(ctx context.Context, key string, value Gaug
 	return nil
 }
 
-///
+// /
 func (st *MemoryStorage) AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics) error {
 	for _, metric := range metrics {
 		switch metric.MType {
