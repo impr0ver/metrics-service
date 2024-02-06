@@ -13,7 +13,7 @@ const (
 	DefaultStoreFile     = "/tmp/metrics-db.json"
 	RestoreTrue          = true
 	DefaultDSN           = "" //user=postgres password=karat911 host=localhost port=5432 dbname=metrics sslmode=disable
-	DefaultCtxTimeout    = 10 * time.Second
+	DefaultCtxTimeout    = 20 * time.Second
 )
 
 type Config struct {
