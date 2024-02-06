@@ -14,17 +14,19 @@ import (
 
 	"github.com/impr0ver/metrics-service/internal/gzip"
 	"github.com/impr0ver/metrics-service/internal/logger"
+	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
 
 	"github.com/go-chi/chi/v5"
 )
 
 const (
-	mType   = "mtype"
-	mName   = "mname"
-	mValue  = "mvalue"
-	counter = "counter"
-	gauge   = "gauge"
+	mType             = "mtype"
+	mName             = "mname"
+	mValue            = "mvalue"
+	counter           = "counter"
+	gauge             = "gauge"
+	defaultCtxTimeout = servconfig.DefaultCtxTimeout
 )
 
 func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
@@ -36,7 +38,7 @@ func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFun
 
 		fmt.Println("reqMetrics", metricType, metricName, metricValue)
 
-		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), defaultCtxTimeout)
 		defer cancel()
 
 		switch metricType {
@@ -84,7 +86,7 @@ func MetricsHandlerGet(memStor storage.MemoryStoragerInterface) http.HandlerFunc
 		metricType := chi.URLParam(r, mType)
 		metricName := chi.URLParam(r, mName)
 
-		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), defaultCtxTimeout)
 		defer cancel()
 
 		switch metricType {
@@ -150,7 +152,7 @@ func MetricsHandlerGetAll(memStor storage.MemoryStoragerInterface) http.HandlerF
 		var pContent storage.Pagecontent
 		var allMetrics []storage.Metric
 
-		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), defaultCtxTimeout)
 		defer cancel()
 
 		foundCounters, err := memStor.GetAllCounters(ctx)
@@ -225,7 +227,7 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 			sLogger.Infoln("reqMetrics", metric.MType, metric.ID, *metric.Value)
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), defaultCtxTimeout)
 		defer cancel()
 
 		switch metric.MType {
@@ -285,7 +287,7 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), defaultCtxTimeout)
 		defer cancel()
 
 		switch metric.MType {
@@ -325,7 +327,6 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 	}
 }
 
-
 func MetricsHandlerPostBatch(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var allMetrics []storage.Metrics
@@ -347,7 +348,7 @@ func MetricsHandlerPostBatch(memStor storage.MemoryStoragerInterface) http.Handl
 			allMetrics = append(allMetrics, metric)
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), defaultCtxTimeout)
 		defer cancel()
 
 		err = memStor.AddNewMetricsAsBatch(ctx, allMetrics)
@@ -360,10 +361,9 @@ func MetricsHandlerPostBatch(memStor storage.MemoryStoragerInterface) http.Handl
 	}
 }
 
-
 func DataBasePing(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), time.Second*3)
+		ctx, cancel := context.WithTimeout(r.Context(), defaultCtxTimeout)
 		defer cancel()
 
 		if err := memStor.DBPing(ctx); err != nil {

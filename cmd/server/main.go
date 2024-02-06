@@ -18,7 +18,7 @@ func main() {
 	var sLogger = logger.NewLogger()
 	cfg := servconfig.ParseParameters()
 	ctx, cancel := context.WithCancel(context.Background())
-	memStor := storage.NewMemoryStorage(ctx, &cfg)
+	memStor := storage.NewStorage(ctx, &cfg)
 
 	r := handlers.ChiRouter(memStor)
 
@@ -49,11 +49,17 @@ func main() {
 		sLogger.Infof("Exit reason: %v \n", err)
 	}
 
-	if cfg.StoreFile != "" {
-		sLogger.Info("Store metrics in file...")
-		err := storage.StoreToFile(memStor, cfg.StoreFile)
-		if err != nil {
-			sLogger.Errorf("error to save data in file: %w", err)
+	if ok := isNotRunningWithDB(&cfg); ok {
+		if cfg.StoreFile != "" {
+			sLogger.Info("Store metrics in file...")
+			err := storage.StoreToFile(memStor, cfg.StoreFile)
+			if err != nil {
+				sLogger.Errorf("error to save data in file: %w", err)
+			}
 		}
 	}
+}
+
+func isNotRunningWithDB(cfg *servconfig.Config) bool {
+	return cfg.DatabaseDSN == ""
 }

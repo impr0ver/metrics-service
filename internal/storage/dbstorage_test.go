@@ -35,7 +35,7 @@ func (suite *DBStorageTestSuite) SetupSuite() {
 	}
 
 	testDSN := "postgresql://localhost:5432/" + dbname + "?user=postgres&password=postgres"
-	suite.DB, _ = storage.ConnectDB(testDSN)
+	suite.DB, _ = storage.ConnectDB(context.TODO(), testDSN)
 }
 
 func (suite *DBStorageTestSuite) TestDBStorageAddCounterAndGetCounter() {

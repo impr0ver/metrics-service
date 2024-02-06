@@ -13,6 +13,7 @@ const (
 	DefaultStoreFile     = "/tmp/metrics-db.json"
 	RestoreTrue          = true
 	DefaultDSN           = "" //user=postgres password=karat911 host=localhost port=5432 dbname=metrics sslmode=disable
+	DefaultCtxTimeout    = 10 * time.Second
 )
 
 type Config struct {
@@ -21,6 +22,7 @@ type Config struct {
 	StoreFile     string
 	Restore       bool
 	DatabaseDSN   string
+	DefaultCtxTimeout time.Duration
 }
 
 func ParseParameters() Config {
@@ -56,6 +58,8 @@ func ParseParameters() Config {
 	if v, ok := os.LookupEnv("DATABASE_DSN"); ok {
 		cfg.DatabaseDSN = v
 	}
+
+	cfg.DefaultCtxTimeout = DefaultCtxTimeout
 
 	return cfg
 }

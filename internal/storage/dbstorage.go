@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx"
@@ -18,7 +17,7 @@ type DBStorage struct {
 }
 
 // DB init
-func ConnectDB(dsn string) (*DBStorage, error) {
+func ConnectDB(ctx context.Context, dsn string) (*DBStorage, error) {
 	dbs := &DBStorage{}
 
 	if err := checkDSN(dsn); err != nil {
@@ -31,12 +30,12 @@ func ConnectDB(dsn string) (*DBStorage, error) {
 
 	dbs.DB = db
 
-	err = dbs.DB.Ping()
+	err = dbs.DB.PingContext(ctx)
 	if err != nil {
 		return dbs, err
 	}
 
-	err = createTables(dbs)
+	err = createTables(ctx, dbs)
 
 	return dbs, err
 }
@@ -46,14 +45,11 @@ func checkDSN(dsn string) (err error) {
 	return err
 }
 
-func createTables(d *DBStorage) (err error) {
+func createTables(ctx context.Context, d *DBStorage) (err error) {
 	const (
 		tableCounter = `CREATE TABLE IF NOT EXISTS Counter (id varchar(255) PRIMARY KEY, delta bigint);`
 		tableGauge   = `CREATE TABLE IF NOT EXISTS Gauge (id varchar(255) PRIMARY KEY, value double precision);`
 	)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
 
 	if _, err = d.DB.ExecContext(ctx, tableCounter); err != nil {
 		return fmt.Errorf("error create table \"Counter\": %w", err)

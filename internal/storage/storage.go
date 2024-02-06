@@ -27,18 +27,20 @@ type FileStorage struct {
 	FilePath string `json:"-"`
 }
 
-func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
+func NewStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
 	var sLogger = logger.NewLogger()
 	var memStor MemoryStoragerInterface
 
 	if cfg.DatabaseDSN != "" { //Init memory as DB
-		db, err := ConnectDB(cfg.DatabaseDSN)
+		ctxTimeOut, cancel := context.WithTimeout(context.Background(), cfg.DefaultCtxTimeout)
+		defer cancel()
+
+		db, err := ConnectDB(ctxTimeOut, cfg.DatabaseDSN)
 		if err != nil {
 			sLogger.Fatalf("error DB: %v", err)
 		}
 		memStor = &DBStorage{DB: db.DB}
-		cfg.StoreFile = ""
-		cfg.Restore = false
+		
 	} else { //Init memory as struct in memory
 		memStor = &MemoryStorage{Gauges: make(map[string]Gauge), Counters: make(map[string]Counter)}
 
@@ -58,6 +60,7 @@ func NewMemoryStorage(ctx context.Context, cfg *servconfig.Config) MemoryStorage
 	}
 	return memStor
 }
+
 
 // add StoreToFile with AddNewCounter - sync mode if i set 0
 func (s *FileStorage) AddNewCounter(ctx context.Context, k string, c Counter) error {
@@ -166,7 +169,6 @@ func (st *MemoryStorage) UpdateGauge(ctx context.Context, key string, value Gaug
 	return nil
 }
 
-// /
 func (st *MemoryStorage) AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics) error {
 	for _, metric := range metrics {
 		switch metric.MType {
@@ -186,8 +188,6 @@ func (st *MemoryStorage) AddNewMetricsAsBatch(ctx context.Context, metrics []Met
 	}
 	return nil
 }
-
-///
 
 // operations with file (store data in file)
 func RestoreFromFile(memStor MemoryStoragerInterface, filePath string) error {
