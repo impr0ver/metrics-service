@@ -18,6 +18,7 @@ type Config struct {
 	Address        string `env:"ADDRESS"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
+	Key            string `env:"KEY"`
 }
 
 func InitConfig(cfg *Config) {
@@ -29,6 +30,7 @@ func InitConfig(cfg *Config) {
 	flag.StringVar(&cfg.Address, "a", "localhost:8080", "Server address and port.")
 	flag.IntVar(&cfg.ReportInterval, "r", 10, "Frequency of sending metrics to the server.")
 	flag.IntVar(&cfg.PollInterval, "p", 2, "Frequency of polling metrics from the package.")
+	flag.StringVar(&cfg.Key, "k", "", "Secret key.")
 	flag.Parse()
 
 	if envAddr := os.Getenv("ADDRESS"); envAddr != "" {
@@ -49,6 +51,10 @@ func InitConfig(cfg *Config) {
 			log.Fatal(err)
 		}
 		cfg.PollInterval = intVar
+	}
+
+	if envKey := os.Getenv("KEY"); envKey != "" {
+		cfg.Key = envKey
 	}
 }
 
@@ -77,7 +83,7 @@ func main() {
 				return
 			case t := <-pollIntTicker.C:
 				sLogger.Infoln("Set metrics at", t.Format("04:05"))
-				agwork.InitMetrics(&mu, &agMemory, cfg.PollInterval)
+				agwork.InitMetrics(&mu, &agMemory)
 			}
 		}
 	}()
@@ -91,7 +97,7 @@ func main() {
 				return
 			case t := <-repIntTicker.C:
 				sLogger.Infoln("Send metrics data at", t.Format("04:05"))
-				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.ReportInterval, cfg.Address) //old functions: agwork.SendMetricsJSON and agwork.SendMetrics without JSON
+				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.Address, cfg.Key) //old functions: agwork.SendMetricsJSON and agwork.SendMetrics without JSON
 			}
 		}
 	}()

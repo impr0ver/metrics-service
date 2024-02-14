@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/impr0ver/metrics-service/internal/agmemory"
+	"github.com/impr0ver/metrics-service/internal/crypt"
 	"github.com/impr0ver/metrics-service/internal/gzip"
 )
 
@@ -57,13 +58,13 @@ func SetMetrics(metrics *agmemory.AgMemory, mu *sync.Mutex) {
 	metrics.PollCount["PollCount"]++
 }
 
-func InitMetrics(mu *sync.Mutex, memory *agmemory.AgMemory, pollInterval int) {
+func InitMetrics(mu *sync.Mutex, memory *agmemory.AgMemory) {
 
 	SetMetrics(memory, mu)
 
 }
 
-func SendMetrics(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval int, URL string) {
+func SendMetrics(mu *sync.Mutex, memory *agmemory.AgMemory, URL string, signKey string) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -90,7 +91,7 @@ func SendMetrics(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval int, 
 	resp.Body.Close()
 }
 
-func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval int, URL string) {
+func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, URL string, signKey string) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -109,7 +110,7 @@ func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval i
 		buff := new(bytes.Buffer)
 		gzip.CompressJSON(buff, agMetrics)
 
-		res, err := sendRequest(http.MethodPost, "application/json", fullURL, buff)
+		res, err := sendRequest(http.MethodPost, "application/json", fullURL, buff, signKey)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -126,7 +127,7 @@ func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval i
 	buff := new(bytes.Buffer)
 	gzip.CompressJSON(buff, agMetrics)
 
-	res, err := sendRequest(http.MethodPost, "application/json", fullURL, buff)
+	res, err := sendRequest(http.MethodPost, "application/json", fullURL, buff, signKey)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -134,7 +135,7 @@ func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval i
 	res.Body.Close()
 }
 
-func SendMetricsJSONBatch(mu *sync.Mutex, memory *agmemory.AgMemory, reportInterval int, URL string) {
+func SendMetricsJSONBatch(mu *sync.Mutex, memory *agmemory.AgMemory, URL string, signKey string) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -165,7 +166,7 @@ func SendMetricsJSONBatch(mu *sync.Mutex, memory *agmemory.AgMemory, reportInter
 	buff := new(bytes.Buffer)
 	gzip.CompressJSON(buff, agMetricsArray)
 
-	res, err := sendRequest(http.MethodPost, "application/json", fullURL, buff)
+	res, err := sendRequest(http.MethodPost, "application/json", fullURL, buff, signKey)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -173,7 +174,7 @@ func SendMetricsJSONBatch(mu *sync.Mutex, memory *agmemory.AgMemory, reportInter
 	res.Body.Close()
 }
 
-func sendRequest(method, contentType, url string, body *bytes.Buffer) (*http.Response, error) {
+func sendRequest(method, contentType, url string, body *bytes.Buffer, signKey string) (*http.Response, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, fmt.Errorf("error new request: %w", err)
@@ -181,6 +182,12 @@ func sendRequest(method, contentType, url string, body *bytes.Buffer) (*http.Res
 
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Add("Content-Encoding", "gzip")
+
+	//check if KEY is exists and sign plainttext with SHA256 algoritm
+	hash, err := crypt.SignDataWithSHA256(body.Bytes(), signKey)
+	if err == nil {
+		req.Header.Add("HashSHA256", hash)
+	}
 
 	client := &http.Client{}
 	res, err := client.Do(req)

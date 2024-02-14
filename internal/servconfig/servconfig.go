@@ -14,6 +14,7 @@ const (
 	RestoreTrue          = true
 	DefaultDSN           = "" //user=postgres password=karat911 host=localhost port=5432 dbname=metrics sslmode=disable
 	DefaultCtxTimeout    = 20 * time.Second
+	DefaultKey           = ""
 )
 
 type Config struct {
@@ -23,6 +24,7 @@ type Config struct {
 	Restore       bool
 	DatabaseDSN   string
 	DefaultCtxTimeout time.Duration
+	Key           string
 }
 
 func ParseParameters() Config {
@@ -34,6 +36,7 @@ func ParseParameters() Config {
 	flag.StringVar(&cfg.StoreFile, "f", DefaultStoreFile, "Path to store file")
 	flag.BoolVar(&cfg.Restore, "r", RestoreTrue, "Restore server metrics flag")
 	flag.StringVar(&cfg.DatabaseDSN, "d", DefaultDSN, "Source to DB")
+	flag.StringVar(&cfg.Key, "k", DefaultKey, "Secret key")
 
 	flag.Parse()
 
@@ -60,6 +63,10 @@ func ParseParameters() Config {
 	}
 
 	cfg.DefaultCtxTimeout = DefaultCtxTimeout
+
+	if v, ok := os.LookupEnv("KEY"); ok {
+		cfg.Key = v
+	}
 
 	return cfg
 }

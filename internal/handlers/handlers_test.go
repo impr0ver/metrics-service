@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/impr0ver/metrics-service/internal/handlers"
+	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
 
 	"github.com/stretchr/testify/assert"
@@ -47,10 +48,11 @@ func TestGzipMiddleware(t *testing.T) {
 		Counters: make(map[string]storage.Counter)}
 	memstorage.UpdateGauge(context.TODO(), "Alloc", 555.34)
 	memstorage.AddNewCounter(context.TODO(), "MyCounter", 95)
+	var cfg = servconfig.Config{}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := handlers.ChiRouter(&memstorage)
+			r := handlers.ChiRouter(&memstorage, &cfg)
 
 			jData, _ := json.Marshal(tt.value)
 			var buf bytes.Buffer
@@ -130,11 +132,11 @@ func TestMetricsHandlerPostJSON(t *testing.T) {
 	}
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
+	var cfg = servconfig.Config{}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			//var sLogger = logger.NewLogger()
-			r := handlers.ChiRouter(&memstorage /*, sLogger*/)
+			r := handlers.ChiRouter(&memstorage, &cfg)
 
 			mbytes, _ := json.Marshal(tt.value)
 			bodyReader := strings.NewReader(string(mbytes))
@@ -191,13 +193,13 @@ func TestMetricsHandlerGetJSON(t *testing.T) {
 	}
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
+	var cfg = servconfig.Config{}
 	memstorage.UpdateGauge(context.TODO(), "Sys", 234.432)
 	memstorage.AddNewCounter(context.TODO(), "MyCounter", 555)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			//var sLogger = logger.NewLogger()
-			r := handlers.ChiRouter(&memstorage /*, sLogger*/)
+			r := handlers.ChiRouter(&memstorage, &cfg)
 			mbytes, _ := json.Marshal(tt.value)
 			bodyReader := strings.NewReader(string(mbytes))
 			request := httptest.NewRequest(http.MethodPost, "/value/", bodyReader)
@@ -225,6 +227,7 @@ func TestMetricsHandlerGetJSON(t *testing.T) {
 func TestMetricsHandlerGet(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
+	var cfg = servconfig.Config{}
 
 	//set some metrics in our storage for unit-test
 	memstorage.AddNewCounter(context.TODO(), "TstCounter", storage.Counter(345))
@@ -247,8 +250,7 @@ func TestMetricsHandlerGet(t *testing.T) {
 	value := fmt.Sprintf("Sys = %f, tstcounter = %d", foundSys, foundCounter)
 	fmt.Println(value)
 
-	//var sLogger = logger.NewLogger()
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage /*, sLogger*/))
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage, &cfg))
 	defer ts.Close()
 
 	var testTable = []struct {
@@ -275,6 +277,7 @@ func TestMetricsHandlerGet(t *testing.T) {
 func TestMetricsHandlerGetAll(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
+	var cfg = servconfig.Config{}
 
 	//set some metrics in our storage for unit-test
 	memstorage.AddNewCounter(context.TODO(), "MyTstCounter", storage.Counter(100))
@@ -285,8 +288,7 @@ func TestMetricsHandlerGetAll(t *testing.T) {
 	memstorage.UpdateGauge(context.TODO(), "RandomValue", storage.Gauge(0.99))
 	memstorage.UpdateGauge(context.TODO(), "NextGC", storage.Gauge(1764408))
 
-	//var sLogger = logger.NewLogger()
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage /*, sLogger*/))
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage, &cfg))
 	defer ts.Close()
 
 	var testTable = []struct {
@@ -309,9 +311,9 @@ func TestMetricsHandlerGetAll(t *testing.T) {
 func TestMetricsHandlerPost(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
+	var cfg = servconfig.Config{}
 
-	//var sLogger = logger.NewLogger()
-	ts := httptest.NewServer(handlers.ChiRouter(&memstorage /*, sLogger*/)) //ts := httptest.NewServer(handlers.MetricsHandlerPost(&memstorage)) !!!
+	ts := httptest.NewServer(handlers.ChiRouter(&memstorage, &cfg)) //ts := httptest.NewServer(handlers.MetricsHandlerPost(&memstorage)) !!!
 	defer ts.Close()
 
 	var testTable = []struct {

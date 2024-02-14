@@ -20,7 +20,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	memStor := storage.NewStorage(ctx, &cfg)
 
-	r := handlers.ChiRouter(memStor)
+	r := handlers.ChiRouter(memStor, &cfg)
 
 	go func() {
 		c := make(chan os.Signal, 1) // we need to reserve to buffer size 1, so the notifier are not blocked

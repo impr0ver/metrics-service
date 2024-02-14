@@ -1,17 +1,20 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/impr0ver/metrics-service/internal/crypt"
 	"github.com/impr0ver/metrics-service/internal/gzip"
 	"github.com/impr0ver/metrics-service/internal/logger"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
@@ -28,6 +31,8 @@ const (
 	gauge             = "gauge"
 	defaultCtxTimeout = servconfig.DefaultCtxTimeout
 )
+
+var signKey string
 
 func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -415,7 +420,6 @@ func gzipMiddleware(next http.Handler) http.Handler {
 			defer cw.Close()
 		}
 
-		//Client request
 		//check client data in gzip format
 		contentEncoding := r.Header.Get("Content-Encoding")
 		sendsGzip := strings.Contains(contentEncoding, "gzip")
@@ -433,11 +437,43 @@ func gzipMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func ChiRouter(memStor storage.MemoryStoragerInterface) *chi.Mux {
+func verifyDataMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sLogger := logger.NewLogger()
+
+		if signKey != "" {
+			//Client request
+			reqHash := r.Header.Get("HashSHA256")
+
+			bodyBytes, err := io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			rBodyCopy := io.NopCloser(bytes.NewBuffer(bodyBytes)) //because r.Body empty after io.ReadAll (can only read it once)!
+			r.Body = rBodyCopy
+
+			//Server responce
+			resultHash, _ := crypt.SignDataWithSHA256(bodyBytes, signKey)
+			w.Header().Add("HashSHA256", resultHash)
+
+			if !crypt.CheckHashSHA256(resultHash, reqHash) {
+				sLogger.Infoln("signature is incorrect")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func ChiRouter(memStor storage.MemoryStoragerInterface, cfg *servconfig.Config) *chi.Mux {
 	r := chi.NewRouter()
 
+	signKey = cfg.Key
+
 	//this chi function do all handmade work in stock! //r.Use(middleware.Compress(5))
-	r.Use(gzipMiddleware)
+	r.Use(verifyDataMiddleware, gzipMiddleware) //first step check virify sending data. Second step work with sending data
 
 	//this chi function do all handmade work in stock! //r.Use(middleware.Logger)
 	r.With(logging).Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))

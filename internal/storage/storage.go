@@ -40,7 +40,7 @@ func NewStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInter
 			sLogger.Fatalf("error DB: %v", err)
 		}
 		memStor = &DBStorage{DB: db.DB}
-		
+
 	} else { //Init memory as struct in memory
 		memStor = &MemoryStorage{Gauges: make(map[string]Gauge), Counters: make(map[string]Counter)}
 
@@ -60,7 +60,6 @@ func NewStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInter
 	}
 	return memStor
 }
-
 
 // add StoreToFile with AddNewCounter - sync mode if i set 0
 func (s *FileStorage) AddNewCounter(ctx context.Context, k string, c Counter) error {
