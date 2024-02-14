@@ -444,23 +444,24 @@ func verifyDataMiddleware(next http.Handler) http.Handler {
 		if signKey != "" {
 			//Client request
 			reqHash := r.Header.Get("HashSHA256")
+			if reqHash != "" {
+				bodyBytes, err := io.ReadAll(r.Body)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				rBodyCopy := io.NopCloser(bytes.NewBuffer(bodyBytes)) //because r.Body empty after io.ReadAll (can only read it once)!
+				r.Body = rBodyCopy
 
-			bodyBytes, err := io.ReadAll(r.Body)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			rBodyCopy := io.NopCloser(bytes.NewBuffer(bodyBytes)) //because r.Body empty after io.ReadAll (can only read it once)!
-			r.Body = rBodyCopy
+				//Server responce
+				resultHash, _ := crypt.SignDataWithSHA256(bodyBytes, signKey)
+				w.Header().Add("HashSHA256", resultHash)
 
-			//Server responce
-			resultHash, _ := crypt.SignDataWithSHA256(bodyBytes, signKey)
-			w.Header().Add("HashSHA256", resultHash)
-
-			if !crypt.CheckHashSHA256(resultHash, reqHash) {
-				sLogger.Infoln("signature is incorrect")
-				w.WriteHeader(http.StatusBadRequest)
-				return
+				if !crypt.CheckHashSHA256(resultHash, reqHash) {
+					sLogger.Infoln("signature is incorrect")
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
 			}
 		}
 		next.ServeHTTP(w, r)
