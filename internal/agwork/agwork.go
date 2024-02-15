@@ -3,6 +3,7 @@ package agwork
 import (
 	"bytes"
 	"errors"
+	"strconv"
 	"syscall"
 
 	"fmt"
@@ -15,9 +16,12 @@ import (
 	"github.com/impr0ver/metrics-service/internal/agmemory"
 	"github.com/impr0ver/metrics-service/internal/crypt"
 	"github.com/impr0ver/metrics-service/internal/gzip"
+
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 )
 
-func SetMetrics(metrics *agmemory.AgMemory, mu *sync.Mutex) {
+func SetRTMetrics(metrics *agmemory.AgMemory, mu *sync.RWMutex) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var rtm runtime.MemStats
 	runtime.ReadMemStats(&rtm)
@@ -58,10 +62,30 @@ func SetMetrics(metrics *agmemory.AgMemory, mu *sync.Mutex) {
 	metrics.PollCount["PollCount"]++
 }
 
-func InitMetrics(mu *sync.Mutex, memory *agmemory.AgMemory) {
+func SetGopsMetrics(metrics *agmemory.AgMemory, mu *sync.RWMutex) error {
+	key := "CPUutilization"
 
-	SetMetrics(memory, mu)
+	percentage, err := cpu.Percent(time.Second*1, true)
+	if err != nil {
+		return err
+	}
 
+	mu.Lock()
+	defer mu.Unlock()
+
+	for i, p := range percentage {
+		keyCPUCount := key + strconv.FormatInt(int64(i+1), 10)
+		metrics.RuntimeMetrics[keyCPUCount] = agmemory.Gauge(p)
+	}
+
+	memory, err := mem.VirtualMemory()
+	if err != nil {
+		return err
+	}
+	metrics.RuntimeMetrics["TotalMemory"] = agmemory.Gauge(memory.Total)
+	metrics.RuntimeMetrics["FreeMemory"] = agmemory.Gauge(memory.Free)
+
+	return nil
 }
 
 func SendMetrics(mu *sync.Mutex, memory *agmemory.AgMemory, URL string, signKey string) {
@@ -91,9 +115,9 @@ func SendMetrics(mu *sync.Mutex, memory *agmemory.AgMemory, URL string, signKey 
 	resp.Body.Close()
 }
 
-func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, URL string, signKey string) {
-	mu.Lock()
-	defer mu.Unlock()
+func SendMetricsJSON(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string) {
+	mu.RLock()
+	defer mu.RUnlock()
 
 	metricData := memory.RuntimeMetrics
 	pollCount := memory.PollCount["PollCount"]
@@ -135,9 +159,9 @@ func SendMetricsJSON(mu *sync.Mutex, memory *agmemory.AgMemory, URL string, sign
 	res.Body.Close()
 }
 
-func SendMetricsJSONBatch(mu *sync.Mutex, memory *agmemory.AgMemory, URL string, signKey string) {
-	mu.Lock()
-	defer mu.Unlock()
+func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int) {
+	mu.RLock()
+	defer mu.RUnlock()
 
 	metricData := memory.RuntimeMetrics
 	pollCount := memory.PollCount["PollCount"]
@@ -146,7 +170,7 @@ func SendMetricsJSONBatch(mu *sync.Mutex, memory *agmemory.AgMemory, URL string,
 	var agMetrics agmemory.Metrics
 	agMetricsArray := make([]agmemory.Metrics, 0)
 
-	//prepare gauges
+	//prepare gauges metrics
 	for key, value := range metricData {
 		val := new(float64)
 		*val = float64(value)
@@ -156,13 +180,32 @@ func SendMetricsJSONBatch(mu *sync.Mutex, memory *agmemory.AgMemory, URL string,
 		agMetricsArray = append(agMetricsArray, agMetrics)
 	}
 
-	//prepare counter
+	//prepare counter metric
 	agMetrics.ID = "PollCount"
 	agMetrics.MType = "counter"
 	agMetrics.Value = nil
 	agMetrics.Delta = (*int64)(&pollCount)
 	agMetricsArray = append(agMetricsArray, agMetrics)
 
+	//some checks
+	agMetricsLenght := len(agMetricsArray)
+	limit := rateLimit
+	if agMetricsLenght < rateLimit {
+		limit = agMetricsLenght
+	}
+	chunk := agMetricsLenght / limit
+
+	w := 0
+	if limit > 1 {
+		//worker pool
+		for w = 0; w < limit-1; w++ {
+			go worker(agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey)
+		}
+	}
+	go worker(agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey) //send last chunk
+}
+
+func worker(agMetricsArray []agmemory.Metrics, fullURL string, signKey string) {
 	buff := new(bytes.Buffer)
 	gzip.CompressJSON(buff, agMetricsArray)
 

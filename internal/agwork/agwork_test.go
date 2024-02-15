@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSetMetrics(t *testing.T) {
+func TestSetRTMetrics(t *testing.T) {
 	st := agmemory.NewAgMemory()
-	var mu sync.Mutex
+	var mu sync.RWMutex
 
-	SetMetrics(&st, &mu)
+	SetRTMetrics(&st, &mu)
 
 	_, ok := st.RuntimeMetrics["Alloc"]
 	require.True(t, ok)
@@ -85,4 +85,18 @@ func TestSetMetrics(t *testing.T) {
 	assert.Equal(t, got, want)
 
 	assert.NotEmpty(t, got)
+}
+
+func TestSetGopsMetrics(t *testing.T) {
+	st := agmemory.NewAgMemory()
+	var mu sync.RWMutex
+
+	err := SetGopsMetrics(&st, &mu)
+	require.NoError(t, err)
+	_, ok := st.RuntimeMetrics["CPUutilization1"]
+	require.True(t, ok)
+	_, ok = st.RuntimeMetrics["TotalMemory"]
+	require.True(t, ok)
+	_, ok = st.RuntimeMetrics["FreeMemory"]
+	require.True(t, ok)
 }
