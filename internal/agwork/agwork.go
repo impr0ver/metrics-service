@@ -21,6 +21,18 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
+type Semaphore struct {
+	C chan struct{}
+}
+
+func (s *Semaphore) Acquire() {
+	s.C <- struct{}{}
+}
+
+func (s *Semaphore) Release() {
+	<-s.C
+}
+
 func SetRTMetrics(metrics *agmemory.AgMemory, mu *sync.RWMutex) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var rtm runtime.MemStats
@@ -159,6 +171,52 @@ func SendMetricsJSON(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, si
 	res.Body.Close()
 }
 
+// func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int) {
+// 	mu.RLock()
+// 	defer mu.RUnlock()
+
+// 	metricData := memory.RuntimeMetrics
+// 	pollCount := memory.PollCount["PollCount"]
+
+// 	fullURL := fmt.Sprintf("http://%s/updates/", URL)
+// 	var agMetrics agmemory.Metrics
+// 	agMetricsArray := make([]agmemory.Metrics, 0)
+
+// 	//prepare gauges metrics
+// 	for key, value := range metricData {
+// 		val := new(float64)
+// 		*val = float64(value)
+// 		agMetrics.Value = val
+// 		agMetrics.MType = "gauge"
+// 		agMetrics.ID = key
+// 		agMetricsArray = append(agMetricsArray, agMetrics)
+// 	}
+
+// 	//prepare counter metric
+// 	agMetrics.ID = "PollCount"
+// 	agMetrics.MType = "counter"
+// 	agMetrics.Value = nil
+// 	agMetrics.Delta = (*int64)(&pollCount)
+// 	agMetricsArray = append(agMetricsArray, agMetrics)
+
+// 	//some checks
+// 	agMetricsLenght := len(agMetricsArray)
+// 	limit := rateLimit
+// 	if agMetricsLenght < rateLimit {
+// 		limit = agMetricsLenght
+// 	}
+// 	chunk := agMetricsLenght / limit
+
+// 	w := 0
+// 	if limit > 1 {
+// 		//worker pool
+// 		for w = 0; w < limit-1; w++ {
+// 			go worker(agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey)
+// 		}
+// 	}
+// 	go worker(agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey) //send last chunk
+// }
+
 func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int) {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -189,23 +247,30 @@ func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL strin
 
 	//some checks
 	agMetricsLenght := len(agMetricsArray)
-	limit := rateLimit
 	if agMetricsLenght < rateLimit {
-		limit = agMetricsLenght
+		rateLimit = agMetricsLenght
 	}
-	chunk := agMetricsLenght / limit
+	chunk := agMetricsLenght / rateLimit
+	
+	//init semaphore with RATE_LIMIT
+	sem := Semaphore{
+		C: make(chan struct{}, rateLimit),
+	}
 
 	w := 0
-	if limit > 1 {
+	if rateLimit > 1 {
 		//worker pool
-		for w = 0; w < limit-1; w++ {
-			go worker(agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey)
+		for w = 0; w < rateLimit-1; w++ {
+			go worker(sem, agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey)
 		}
 	}
-	go worker(agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey) //send last chunk
+	go worker(sem, agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey)
 }
 
-func worker(agMetricsArray []agmemory.Metrics, fullURL string, signKey string) {
+func worker(sem Semaphore, agMetricsArray []agmemory.Metrics, fullURL string, signKey string) {
+	sem.Acquire()       //block routine via struct{}{} literal
+	defer sem.Release() //unblock via read from chan
+
 	buff := new(bytes.Buffer)
 	gzip.CompressJSON(buff, agMetricsArray)
 

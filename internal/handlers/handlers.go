@@ -356,7 +356,6 @@ func MetricsHandlerPostBatch(memStor storage.MemoryStoragerInterface) http.Handl
 		ctx, cancel := context.WithTimeout(r.Context(), defaultCtxTimeout)
 		defer cancel()
 
-		fmt.Println("allMetrics", allMetrics)////////////////////////
 		err = memStor.AddNewMetricsAsBatch(ctx, allMetrics)
 		if err != nil {
 			writeError(err, http.StatusInternalServerError, w)
