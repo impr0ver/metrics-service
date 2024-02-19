@@ -171,51 +171,6 @@ func SendMetricsJSON(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, si
 	res.Body.Close()
 }
 
-// func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int) {
-// 	mu.RLock()
-// 	defer mu.RUnlock()
-
-// 	metricData := memory.RuntimeMetrics
-// 	pollCount := memory.PollCount["PollCount"]
-
-// 	fullURL := fmt.Sprintf("http://%s/updates/", URL)
-// 	var agMetrics agmemory.Metrics
-// 	agMetricsArray := make([]agmemory.Metrics, 0)
-
-// 	//prepare gauges metrics
-// 	for key, value := range metricData {
-// 		val := new(float64)
-// 		*val = float64(value)
-// 		agMetrics.Value = val
-// 		agMetrics.MType = "gauge"
-// 		agMetrics.ID = key
-// 		agMetricsArray = append(agMetricsArray, agMetrics)
-// 	}
-
-// 	//prepare counter metric
-// 	agMetrics.ID = "PollCount"
-// 	agMetrics.MType = "counter"
-// 	agMetrics.Value = nil
-// 	agMetrics.Delta = (*int64)(&pollCount)
-// 	agMetricsArray = append(agMetricsArray, agMetrics)
-
-// 	//some checks
-// 	agMetricsLenght := len(agMetricsArray)
-// 	limit := rateLimit
-// 	if agMetricsLenght < rateLimit {
-// 		limit = agMetricsLenght
-// 	}
-// 	chunk := agMetricsLenght / limit
-
-// 	w := 0
-// 	if limit > 1 {
-// 		//worker pool
-// 		for w = 0; w < limit-1; w++ {
-// 			go worker(agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey)
-// 		}
-// 	}
-// 	go worker(agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey) //send last chunk
-// }
 
 func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int) {
 	mu.RLock()
