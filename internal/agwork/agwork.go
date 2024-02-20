@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/impr0ver/metrics-service/internal/agconfig"
 	"github.com/impr0ver/metrics-service/internal/agmemory"
 	"github.com/impr0ver/metrics-service/internal/crypt"
 	"github.com/impr0ver/metrics-service/internal/gzip"
@@ -171,10 +172,12 @@ func SendMetricsJSON(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, si
 	res.Body.Close()
 }
 
-
 func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int) {
 	mu.RLock()
 	defer mu.RUnlock()
+
+	//init semaphore with RATE_LIMIT
+	sem := agconfig.NewSemaphore(rateLimit)
 
 	metricData := memory.RuntimeMetrics
 	pollCount := memory.PollCount["PollCount"]
@@ -206,11 +209,6 @@ func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL strin
 		rateLimit = agMetricsLenght
 	}
 	chunk := agMetricsLenght / rateLimit
-	
-	//init semaphore with RATE_LIMIT
-	sem := Semaphore{
-		C: make(chan struct{}, rateLimit),
-	}
 
 	w := 0
 	if rateLimit > 1 {
@@ -222,7 +220,7 @@ func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL strin
 	go worker(sem, agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey)
 }
 
-func worker(sem Semaphore, agMetricsArray []agmemory.Metrics, fullURL string, signKey string) {
+func worker(sem *agconfig.Semaphore, agMetricsArray []agmemory.Metrics, fullURL string, signKey string) {
 	sem.Acquire()       //block routine via struct{}{} literal
 	defer sem.Release() //unblock via read from chan
 
