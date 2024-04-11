@@ -22,8 +22,7 @@ func (s *Semaphore) Release() {
 }
 
 func NewSemaphore(rateLimit int) *Semaphore {
-	sem := &Semaphore{C: make(chan struct{}, rateLimit)}
-	return sem
+	return &Semaphore{C: make(chan struct{}, rateLimit)}
 }
 
 

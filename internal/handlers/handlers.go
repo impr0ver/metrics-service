@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/impr0ver/metrics-service/internal/crypt"
 	"github.com/impr0ver/metrics-service/internal/gzip"
@@ -21,6 +20,7 @@ import (
 	"github.com/impr0ver/metrics-service/internal/storage"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 const (
@@ -380,29 +380,6 @@ func DataBasePing(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	}
 }
 
-func logging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		start := time.Now()
-
-		lw := logger.NewResponceWriterWithLogging(w)
-		sLogger := logger.NewLogger()
-
-		next.ServeHTTP(lw, r) // servicing the original request
-		duration := time.Since(start)
-
-		//send request information to zap
-		sLogger.Infoln(
-			"\033[93m"+"uri", r.RequestURI+"\033[0m",
-			"\033[96m"+"method", r.Method+"\033[0m",
-			"\033[32m"+"duration", duration.String()+"\033[0m",
-			"\033[36m"+"status", lw.ResponseData.Status,
-			"size", lw.ResponseData.Size,
-			"\033[0m",
-		)
-	})
-}
-
 func gzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ow := w
@@ -476,14 +453,19 @@ func ChiRouter(memStor storage.MemoryStoragerInterface, cfg *servconfig.Config) 
 	//this chi function do all handmade work in stock! //r.Use(middleware.Compress(5))
 	r.Use(verifyDataMiddleware, gzipMiddleware) //first step check virify sending data. Second step work with sending data
 
-	//this chi function do all handmade work in stock! //r.Use(middleware.Logger)
-	r.With(logging).Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))
-	r.With(logging).Get("/value/{mtype}/{mname}", MetricsHandlerGet(memStor))
-	r.With(logging).Get("/", MetricsHandlerGetAll(memStor))
-	r.With(logging).Post("/value/", MetricsHandlerGetJSON(memStor))
-	r.With(logging).Post("/update/", MetricsHandlerPostJSON(memStor))
-	r.With(logging).Get("/ping", DataBasePing(memStor))
-	r.With(logging).Post("/updates/", MetricsHandlerPostBatch(memStor))
+	//replace my logger on ghi middleware logger
+	r.Use(middleware.Logger)
+
+	//add pprof via chi
+	r.Mount("/debug", middleware.Profiler())
+
+	r.Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))
+	r.Get("/value/{mtype}/{mname}", MetricsHandlerGet(memStor))
+	r.Get("/", MetricsHandlerGetAll(memStor))
+	r.Post("/value/", MetricsHandlerGetJSON(memStor))
+	r.Post("/update/", MetricsHandlerPostJSON(memStor))
+	r.Get("/ping", DataBasePing(memStor))
+	r.Post("/updates/", MetricsHandlerPostBatch(memStor))
 
 	return r
 }

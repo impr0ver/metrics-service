@@ -362,3 +362,192 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string) (int, s
 
 	return resp.StatusCode, string(respBody)
 }
+
+///
+
+func TestGzipEncodingAppRouter(t *testing.T) {
+	type Metrics struct {
+		ID    string  `json:"id"`
+		MType string  `json:"type"`
+		Delta int64   `json:"delta,omitempty"`
+		Value float64 `json:"value,omitempty"`
+	}
+	type want struct {
+		metric     Metrics
+		httpStatus int
+	}
+	tests := []struct {
+		name  string
+		value Metrics
+		want  want
+	}{
+		{"simple gauge test #1",
+		Metrics{ID: "Alloc", MType: "gauge"},
+			want{Metrics{ID: "Alloc", MType: "gauge", Value: 345.13, Delta: 0}, http.StatusOK}},
+		{"simple counter test #2",
+		Metrics{ID: "NewCounter", MType: "counter"},
+			want{Metrics{ID: "NewCounter", MType: "counter", Delta: 100}, http.StatusOK}},
+	}
+	ctx := context.TODO()
+
+	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	var cfg = servconfig.Config{}
+
+	memstorage.UpdateGauge(ctx, "Alloc", 345.13)
+	memstorage.AddNewCounter(ctx, "NewCounter", 100)
+	
+	r := handlers.ChiRouter(&memstorage, &cfg)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mbytes, _ := json.Marshal(tt.value)
+			var buf bytes.Buffer
+			g := gzip.NewWriter(&buf)
+			g.Write(mbytes)
+			g.Close()
+			request := httptest.NewRequest(http.MethodPost, "/value/", &buf)
+			request.Header.Add("Content-Encoding", "gzip")
+			request.Header.Add("Accept-Encoding", "gzip")
+			request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, request)
+
+			res := w.Result()
+			defer res.Body.Close()
+
+			if res.StatusCode != tt.want.httpStatus {
+				t.Errorf("Expected status code %d, got %d", tt.want.httpStatus, res.StatusCode)
+			}
+			gr, _ := gzip.NewReader(res.Body)
+			var metric Metrics
+			err := json.NewDecoder(gr).Decode(&metric)
+			gr.Close()
+
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, tt.want.metric, metric)
+			switch mtype := tt.want.metric.MType; mtype {
+			case "counter":
+				v, _ := memstorage.GetCounterByKey(ctx, tt.want.metric.ID)
+				assert.Equal(t, int64(v), tt.want.metric.Delta)
+			case "gauge":
+				v, _ := memstorage.GetGaugeByKey(ctx, tt.want.metric.ID)
+				assert.Equal(t, float64(v), tt.want.metric.Value)
+			}
+		})
+	}
+}
+
+//Add Benchmark tests
+func BenchmarkMetricsHandlerPostBatch(b *testing.B) {
+	testJSON := `[{ "id": "MCacheSys", "type": "gauge", "value": 15600 },
+  { "id": "StackInuse", "type": "gauge", "value": 327680 },
+  { "id": "HeapInuse", "type": "gauge", "value": 811008 },
+  { "id": "CPUutilization1", "type": "gauge", "value": 1.9801980198269442 },
+  { "id": "StackSys", "type": "gauge", "value": 327680 },
+  { "id": "HeapIdle", "type": "gauge", "value": 3055616 },
+  { "id": "BuckHashSys", "type": "gauge", "value": 4022 },
+  { "id": "TotalMemory", "type": "gauge", "value": 2046296064 },
+  { "id": "LastGC", "type": "gauge", "value": 0 },
+  { "id": "NumForcedGC", "type": "gauge", "value": 0 },
+  { "id": "HeapSys", "type": "gauge", "value": 3866624 },
+  { "id": "HeapAlloc", "type": "gauge", "value": 308568 },
+  { "id": "GCSys", "type": "gauge", "value": 8055592 },
+  { "id": "Alloc", "type": "gauge", "value": 308568 },
+  { "id": "MCacheInuse", "type": "gauge", "value": 1200 }]`
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+
+		memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+			Counters: make(map[string]storage.Counter)}
+		var cfg = servconfig.Config{}
+
+		r := handlers.ChiRouter(&memstorage, &cfg)
+
+		bodyReader := strings.NewReader(testJSON)
+		request := httptest.NewRequest(http.MethodPost, "/updates/", bodyReader)
+		request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+		w := httptest.NewRecorder()
+		b.StartTimer()
+		r.ServeHTTP(w, request)
+		res := w.Result()
+		res.Body.Close()
+	}
+}
+
+func BenchmarkMetricsHandlerPostJSON(b *testing.B) {
+	type Metrics struct {
+		ID    string  `json:"id"`
+		MType string  `json:"type"`
+		Delta int64   `json:"delta,omitempty"`
+		Value float64 `json:"value,omitempty"`
+	}
+	metric := Metrics{ID: "Alloc", MType: "gauge", Value: 1234.321}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+
+		memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+			Counters: make(map[string]storage.Counter)}
+		var cfg = servconfig.Config{}
+
+		r := handlers.ChiRouter(&memstorage, &cfg)
+
+		mbytes, _ := json.Marshal(metric)
+		bodyReader := strings.NewReader(string(mbytes))
+		request := httptest.NewRequest(http.MethodPost, "/update/", bodyReader)
+		request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+		w := httptest.NewRecorder()
+
+		b.StartTimer()
+
+		r.ServeHTTP(w, request)
+		res := w.Result()
+		res.Body.Close()
+	}
+}
+
+func BenchmarkMetricsHandlerGetJSON(b *testing.B) {
+	ctx := context.TODO()
+	type Metrics struct {
+		ID    string  `json:"id"`
+		MType string  `json:"type"`
+		Delta int64   `json:"delta,omitempty"`
+		Value float64 `json:"value,omitempty"`
+	}
+	metric := Metrics{ID: "Sys", MType: "gauge"}
+
+	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	var cfg = servconfig.Config{}
+
+	memstorage.UpdateGauge(ctx, "Sys", 234.432)
+	
+	r := handlers.ChiRouter(&memstorage, &cfg)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+
+		mbytes, _ := json.Marshal(metric)
+		bodyReader := strings.NewReader(string(mbytes))
+		request := httptest.NewRequest(http.MethodPost, "/value/", bodyReader)
+		request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+		w := httptest.NewRecorder()
+		b.StartTimer()
+		r.ServeHTTP(w, request)
+		res := w.Result()
+		res.Body.Close()
+	}
+}
