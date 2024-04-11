@@ -18,13 +18,13 @@ const (
 )
 
 type Config struct {
-	ListenAddr    string
-	StoreInterval time.Duration
-	StoreFile     string
-	Restore       bool
-	DatabaseDSN   string
+	ListenAddr        string
+	StoreInterval     time.Duration
+	StoreFile         string
+	Restore           bool
+	DatabaseDSN       string
 	DefaultCtxTimeout time.Duration
-	Key           string
+	Key               string
 }
 
 func ParseParameters() Config {

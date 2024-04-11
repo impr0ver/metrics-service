@@ -20,5 +20,3 @@ type Metrics struct {
 	Delta *int64   `json:"delta,omitempty"` // pointer on CountValue (pointer need for check on nil)
 	Value *float64 `json:"value,omitempty"` // pointer on GaugeValue (pointer need for check on nil)
 }
-
-

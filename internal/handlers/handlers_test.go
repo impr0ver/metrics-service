@@ -382,10 +382,10 @@ func TestGzipEncodingAppRouter(t *testing.T) {
 		want  want
 	}{
 		{"simple gauge test #1",
-		Metrics{ID: "Alloc", MType: "gauge"},
+			Metrics{ID: "Alloc", MType: "gauge"},
 			want{Metrics{ID: "Alloc", MType: "gauge", Value: 345.13, Delta: 0}, http.StatusOK}},
 		{"simple counter test #2",
-		Metrics{ID: "NewCounter", MType: "counter"},
+			Metrics{ID: "NewCounter", MType: "counter"},
 			want{Metrics{ID: "NewCounter", MType: "counter", Delta: 100}, http.StatusOK}},
 	}
 	ctx := context.TODO()
@@ -397,7 +397,7 @@ func TestGzipEncodingAppRouter(t *testing.T) {
 
 	memstorage.UpdateGauge(ctx, "Alloc", 345.13)
 	memstorage.AddNewCounter(ctx, "NewCounter", 100)
-	
+
 	r := handlers.ChiRouter(&memstorage, &cfg)
 
 	for _, tt := range tests {
@@ -442,7 +442,7 @@ func TestGzipEncodingAppRouter(t *testing.T) {
 	}
 }
 
-//Add Benchmark tests
+// Add Benchmark tests
 func BenchmarkMetricsHandlerPostBatch(b *testing.B) {
 	testJSON := `[{ "id": "MCacheSys", "type": "gauge", "value": 15600 },
   { "id": "StackInuse", "type": "gauge", "value": 327680 },
@@ -532,7 +532,7 @@ func BenchmarkMetricsHandlerGetJSON(b *testing.B) {
 	var cfg = servconfig.Config{}
 
 	memstorage.UpdateGauge(ctx, "Sys", 234.432)
-	
+
 	r := handlers.ChiRouter(&memstorage, &cfg)
 
 	b.ResetTimer()

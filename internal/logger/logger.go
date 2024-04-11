@@ -19,7 +19,7 @@ func NewLogger() *zap.SugaredLogger {
 	return &sugar
 }
 
-//Overriding two methods from an interface
+// Overriding two methods from an interface
 type ResponseData struct {
 	Status int
 	Size   int
@@ -35,7 +35,7 @@ func NewResponceWriterWithLogging(w http.ResponseWriter) *LoggingResponseWriter 
 		Status: 0,
 		Size:   0,
 	}
-	
+
 	lw := LoggingResponseWriter{
 		ResponseWriter: w,
 		ResponseData:   responseData,

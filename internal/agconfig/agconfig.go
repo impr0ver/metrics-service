@@ -25,7 +25,6 @@ func NewSemaphore(rateLimit int) *Semaphore {
 	return &Semaphore{C: make(chan struct{}, rateLimit)}
 }
 
-
 type Config struct {
 	Address        string `env:"ADDRESS"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
@@ -34,7 +33,7 @@ type Config struct {
 	RateLimit      int    `env:"RATE_LIMIT"`
 }
 
-func InitConfig(/*cfg *Config*/) Config {
+func InitConfig() Config {
 
 	var cfg Config
 
