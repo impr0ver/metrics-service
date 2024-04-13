@@ -16,7 +16,7 @@ type DBStorage struct {
 	DB *sql.DB
 }
 
-// DB init
+// ConnectDB init connect to database.
 func ConnectDB(ctx context.Context, dsn string) (*DBStorage, error) {
 	dbs := &DBStorage{}
 
@@ -40,11 +40,13 @@ func ConnectDB(ctx context.Context, dsn string) (*DBStorage, error) {
 	return dbs, err
 }
 
+// checkDSN parse DSN string.
 func checkDSN(dsn string) (err error) {
 	_, err = pgx.ParseDSN(dsn)
 	return err
 }
 
+//createTables creates two tables in db% Counter and Gauge
 func createTables(ctx context.Context, d *DBStorage) (err error) {
 	const (
 		tableCounter = `CREATE TABLE IF NOT EXISTS Counter (id varchar(255) PRIMARY KEY, delta bigint);`
@@ -60,6 +62,7 @@ func createTables(ctx context.Context, d *DBStorage) (err error) {
 	return nil
 }
 
+// AddNewCounter - add new counter (storage in db).
 func (d *DBStorage) AddNewCounter(ctx context.Context, key string, value Counter) error {
 	_, err := d.DB.ExecContext(ctx, `INSERT INTO Counter (id, delta) VALUES ($1, $2);`, key, int64(value))
 	var pgErr *pgconn.PgError
@@ -69,6 +72,7 @@ func (d *DBStorage) AddNewCounter(ctx context.Context, key string, value Counter
 	return err
 }
 
+// UpdateGauge - update gauge value (storage in db).
 func (d *DBStorage) UpdateGauge(ctx context.Context, key string, value Gauge) error {
 	_, err := d.DB.ExecContext(ctx, `INSERT INTO Gauge (id, value) VALUES ($1, $2);`, key, float64(value))
 	var pgErr *pgconn.PgError
@@ -79,6 +83,7 @@ func (d *DBStorage) UpdateGauge(ctx context.Context, key string, value Gauge) er
 	return err
 }
 
+// GetGaugeByKey - get gauge value by key (storage in db).
 func (d *DBStorage) GetGaugeByKey(ctx context.Context, key string) (Gauge, error) {
 	selectQuery := `SELECT value FROM Gauge WHERE id = $1;`
 	row := d.DB.QueryRowContext(ctx, selectQuery, key)
@@ -87,6 +92,7 @@ func (d *DBStorage) GetGaugeByKey(ctx context.Context, key string) (Gauge, error
 	return Gauge(val), err
 }
 
+// GetCounterByKey - get counter value by key (storage in db).
 func (d *DBStorage) GetCounterByKey(ctx context.Context, key string) (Counter, error) {
 	selectQuery := `SELECT delta FROM Counter WHERE id = $1;`
 	row := d.DB.QueryRowContext(ctx, selectQuery, key)
@@ -95,6 +101,7 @@ func (d *DBStorage) GetCounterByKey(ctx context.Context, key string) (Counter, e
 	return Counter(val), err
 }
 
+// GetAllGauges - get all gauges (storage in db).
 func (d *DBStorage) GetAllGauges(ctx context.Context) (map[string]Gauge, error) {
 	res := make(map[string]Gauge)
 	selectQuery := `SELECT id, value FROM Gauge;`
@@ -124,6 +131,7 @@ func (d *DBStorage) GetAllGauges(ctx context.Context) (map[string]Gauge, error) 
 	return res, nil
 }
 
+// GetAllCounters - get all counters (storage in db).
 func (d *DBStorage) GetAllCounters(ctx context.Context) (map[string]Counter, error) {
 	res := make(map[string]Counter)
 	selectQuery := `SELECT id, delta FROM Counter;`
@@ -153,11 +161,13 @@ func (d *DBStorage) GetAllCounters(ctx context.Context) (map[string]Counter, err
 	return res, nil
 }
 
+// DBPing ping db for alive
 func (d *DBStorage) DBPing(ctx context.Context) error {
 	err := d.DB.PingContext(ctx)
 	return err
 }
 
+// AddNewMetricsAsBatch add or update metrics (storage in db). 
 func (d *DBStorage) AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics) error {
 	tx, err := d.DB.Begin()
 	if err != nil {

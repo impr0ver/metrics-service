@@ -1,3 +1,6 @@
+// Handlers package contains endpoint handlers for accessing and reporting various metrics.
+// The package implements its own function for compressing and decompressing http-requests and http-responses.
+// Metrics are received in the JSON-form (struct internals/storage/Metrics).
 package handlers
 
 import (
@@ -29,11 +32,13 @@ const (
 	mValue            = "mvalue"
 	counter           = "counter"
 	gauge             = "gauge"
-	defaultCtxTimeout = servconfig.DefaultCtxTimeout
+	defaultCtxTimeout = servconfig.DefaultCtxTimeout // default context timeout from servconfig
 )
 
-var signKey string
+var signKey string // secret key from servconfig
 
+// MetricsHandlerPost endpoint handler "/update/{mtype}/{mname}/{mvalue}" metric update.
+// Type can take two values: "gauge" or "counter".
 func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -85,6 +90,8 @@ func MetricsHandlerPost(memStor storage.MemoryStoragerInterface) http.HandlerFun
 	}
 }
 
+// MetricsHandlerGet endpoint handler "/value/{mtype}/{mname}".
+// Returns the current value of the requested metric.
 func MetricsHandlerGet(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -124,6 +131,7 @@ func MetricsHandlerGet(memStor storage.MemoryStoragerInterface) http.HandlerFunc
 	}
 }
 
+// MetricsHandlerGetAll endpoint handler "/", get all metrics in browser.
 func MetricsHandlerGetAll(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 
 	const tmplHTML = `
@@ -212,6 +220,8 @@ func writeError(err error, httpStatus int, w http.ResponseWriter) bool {
 	return true
 }
 
+// MetricsHandlerPostJSON endpoint handler "/update/", metric update.
+// Accepts JSON of storage.Metrics.
 func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -280,6 +290,8 @@ func MetricsHandlerPostJSON(memStor storage.MemoryStoragerInterface) http.Handle
 	}
 }
 
+// MetricsHandlerGetJSON endpoint handler "/value/".
+// Returns the value of the metric whose name was specified in the input JSON of the storage.Metrics structure.
 func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -332,6 +344,8 @@ func MetricsHandlerGetJSON(memStor storage.MemoryStoragerInterface) http.Handler
 	}
 }
 
+// MetricsHandlerPostBatch endpoint handler "/updates/", metrics update.
+// Accepts JSON slice of storage.Metrics.
 func MetricsHandlerPostBatch(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var allMetrics []storage.Metrics
@@ -366,6 +380,7 @@ func MetricsHandlerPostBatch(memStor storage.MemoryStoragerInterface) http.Handl
 	}
 }
 
+// DataBasePing endpoint handler "/ping", checks for a connection to the database.
 func DataBasePing(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), defaultCtxTimeout)
@@ -380,29 +395,27 @@ func DataBasePing(memStor storage.MemoryStoragerInterface) http.HandlerFunc {
 	}
 }
 
+// gzipMiddleware compress and decompress data on middleware.
 func gzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ow := w
 
-		//Server responce
-		//some checks
+		// some checks for server response
 		contentType := r.Header.Get("Content-Type")
 		supportsType := strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json")
 		acceptEncoding := r.Header.Get("Accept-Encoding")
 		supportsGzip := strings.Contains(acceptEncoding, "gzip")
 		if supportsGzip && supportsType {
-			// compress http.ResponseWriter
-			cw := gzip.NewCompressWriter(w)
+			cw := gzip.NewCompressWriter(w) // compress http.ResponseWriter
 			ow = cw
 			defer cw.Close()
 		}
 
-		//check client data in gzip format
+		// check client data in gzip format
 		contentEncoding := r.Header.Get("Content-Encoding")
 		sendsGzip := strings.Contains(contentEncoding, "gzip")
 		if sendsGzip {
-			//decompress r.Body
-			cr, err := gzip.NewCompressReader(r.Body)
+			cr, err := gzip.NewCompressReader(r.Body) // decompress r.Body
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -414,12 +427,12 @@ func gzipMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// verifyDataMiddleware check hash from request.
 func verifyDataMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sLogger := logger.NewLogger()
 
 		if signKey != "" {
-			//Client request
 			reqHash := r.Header.Get("HashSHA256")
 			if reqHash != "" {
 				bodyBytes, err := io.ReadAll(r.Body)
@@ -427,10 +440,9 @@ func verifyDataMiddleware(next http.Handler) http.Handler {
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
-				rBodyCopy := io.NopCloser(bytes.NewBuffer(bodyBytes)) //because r.Body empty after io.ReadAll (can only read it once)!
+				rBodyCopy := io.NopCloser(bytes.NewBuffer(bodyBytes)) //use this, because r.Body empty after io.ReadAll (can only read it once)!
 				r.Body = rBodyCopy
 
-				//Server responce
 				resultHash, _ := crypt.SignDataWithSHA256(bodyBytes, signKey)
 				w.Header().Add("HashSHA256", resultHash)
 
@@ -445,19 +457,17 @@ func verifyDataMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// ChiRouter initializing and setting up the router.
 func ChiRouter(memStor storage.MemoryStoragerInterface, cfg *servconfig.Config) *chi.Mux {
 	r := chi.NewRouter()
 
 	signKey = cfg.Key
 
-	//this chi function do all handmade work in stock! //r.Use(middleware.Compress(5))
-	r.Use(verifyDataMiddleware, gzipMiddleware) //first step check virify sending data. Second step work with sending data
+	r.Use(verifyDataMiddleware, gzipMiddleware) // first step check virify sending data. Second step work with sending data
 
-	//replace my logger on ghi middleware logger
-	r.Use(middleware.Logger)
+	r.Use(middleware.Logger) // replace my custom logger on chi middleware logger
 
-	//add pprof via chi
-	r.Mount("/debug", middleware.Profiler())
+	r.Mount("/debug", middleware.Profiler()) // add pprof via chi
 
 	r.Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))
 	r.Get("/value/{mtype}/{mname}", MetricsHandlerGet(memStor))

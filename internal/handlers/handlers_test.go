@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestGzipMiddleware test.
 func TestGzipMiddleware(t *testing.T) {
 	type metricAlias struct {
 		ID    string  `json:"id"`
@@ -94,12 +95,13 @@ func TestGzipMiddleware(t *testing.T) {
 	}
 }
 
+// TestMetricsHandlerPostJSON test.
 func TestMetricsHandlerPostJSON(t *testing.T) {
 	type Metrics struct {
 		ID    string   `json:"id"`
 		MType string   `json:"type"`
-		Delta *int64   `json:"delta,omitempty"` //countValue
-		Value *float64 `json:"value,omitempty"` //gaugeValue
+		Delta *int64   `json:"delta,omitempty"` // countValue
+		Value *float64 `json:"value,omitempty"` // gaugeValue
 	}
 
 	type want struct {
@@ -164,6 +166,7 @@ func TestMetricsHandlerPostJSON(t *testing.T) {
 	}
 }
 
+// TestMetricsHandlerGetJSON test.
 func TestMetricsHandlerGetJSON(t *testing.T) {
 	type Metrics struct {
 		ID    string   `json:"id"`
@@ -224,6 +227,7 @@ func TestMetricsHandlerGetJSON(t *testing.T) {
 	}
 }
 
+// TestMetricsHandlerGet test.
 func TestMetricsHandlerGet(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
@@ -274,6 +278,7 @@ func TestMetricsHandlerGet(t *testing.T) {
 	}
 }
 
+// TestMetricsHandlerGetAll test.
 func TestMetricsHandlerGetAll(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
@@ -308,6 +313,7 @@ func TestMetricsHandlerGetAll(t *testing.T) {
 	}
 }
 
+// TestMetricsHandlerPost test.
 func TestMetricsHandlerPost(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
@@ -363,86 +369,38 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string) (int, s
 	return resp.StatusCode, string(respBody)
 }
 
-///
-
-func TestGzipEncodingAppRouter(t *testing.T) {
-	type Metrics struct {
-		ID    string  `json:"id"`
-		MType string  `json:"type"`
-		Delta int64   `json:"delta,omitempty"`
-		Value float64 `json:"value,omitempty"`
-	}
-	type want struct {
-		metric     Metrics
-		httpStatus int
-	}
-	tests := []struct {
-		name  string
-		value Metrics
-		want  want
-	}{
-		{"simple gauge test #1",
-			Metrics{ID: "Alloc", MType: "gauge"},
-			want{Metrics{ID: "Alloc", MType: "gauge", Value: 345.13, Delta: 0}, http.StatusOK}},
-		{"simple counter test #2",
-			Metrics{ID: "NewCounter", MType: "counter"},
-			want{Metrics{ID: "NewCounter", MType: "counter", Delta: 100}, http.StatusOK}},
-	}
-	ctx := context.TODO()
-
-	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
-		Counters: make(map[string]storage.Counter)}
-
-	var cfg = servconfig.Config{}
-
-	memstorage.UpdateGauge(ctx, "Alloc", 345.13)
-	memstorage.AddNewCounter(ctx, "NewCounter", 100)
+func TestMetricsHandlerPostBatch(t *testing.T) {
+	testJSON := `[{ "id": "MCacheSys", "type": "gauge", "value": 15600 },
+  { "id": "StackInuse", "type": "gauge", "value": 327680 },
+  { "id": "HeapInuse", "type": "gauge", "value": 811008 },
+  { "id": "CPUutilization1", "type": "gauge", "value": 1.9801980198269442 },
+  { "id": "StackSys", "type": "gauge", "value": 327680 },
+  { "id": "GCSys", "type": "gauge", "value": 8055592 },
+  { "id": "Alloc", "type": "gauge", "value": 308568 },
+  { "id": "MCacheInuse", "type": "gauge", "value": 1200 }]`
 
 	r := handlers.ChiRouter(&memstorage, &cfg)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mbytes, _ := json.Marshal(tt.value)
-			var buf bytes.Buffer
-			g := gzip.NewWriter(&buf)
-			g.Write(mbytes)
-			g.Close()
-			request := httptest.NewRequest(http.MethodPost, "/value/", &buf)
-			request.Header.Add("Content-Encoding", "gzip")
-			request.Header.Add("Accept-Encoding", "gzip")
-			request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	bodyReader := strings.NewReader(testJSON)
 
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, request)
+	request := httptest.NewRequest(http.MethodPost, "/updates/", bodyReader)
+	request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, request)
 
-			res := w.Result()
-			defer res.Body.Close()
+	res := w.Result()
+	res.Body.Close()
 
-			if res.StatusCode != tt.want.httpStatus {
-				t.Errorf("Expected status code %d, got %d", tt.want.httpStatus, res.StatusCode)
-			}
-			gr, _ := gzip.NewReader(res.Body)
-			var metric Metrics
-			err := json.NewDecoder(gr).Decode(&metric)
-			gr.Close()
-
-			if err != nil {
-				t.Fatal(err)
-			}
-			assert.Equal(t, tt.want.metric, metric)
-			switch mtype := tt.want.metric.MType; mtype {
-			case "counter":
-				v, _ := memstorage.GetCounterByKey(ctx, tt.want.metric.ID)
-				assert.Equal(t, int64(v), tt.want.metric.Delta)
-			case "gauge":
-				v, _ := memstorage.GetGaugeByKey(ctx, tt.want.metric.ID)
-				assert.Equal(t, float64(v), tt.want.metric.Value)
-			}
-		})
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
 	}
+
+	assert.Equal(t, res.StatusCode, 200)
+	assert.Equal(t, string(respBody), "Registered successfully!")
 }
 
-// Add Benchmark tests
+// BenchmarkMetricsHandlerPostBatch test.
 func BenchmarkMetricsHandlerPostBatch(b *testing.B) {
 	testJSON := `[{ "id": "MCacheSys", "type": "gauge", "value": 15600 },
   { "id": "StackInuse", "type": "gauge", "value": 327680 },
@@ -482,6 +440,7 @@ func BenchmarkMetricsHandlerPostBatch(b *testing.B) {
 	}
 }
 
+// BenchmarkMetricsHandlerPostJSON test.
 func BenchmarkMetricsHandlerPostJSON(b *testing.B) {
 	type Metrics struct {
 		ID    string  `json:"id"`
@@ -516,6 +475,7 @@ func BenchmarkMetricsHandlerPostJSON(b *testing.B) {
 	}
 }
 
+// BenchmarkMetricsHandlerGetJSON test.
 func BenchmarkMetricsHandlerGetJSON(b *testing.B) {
 	ctx := context.TODO()
 	type Metrics struct {

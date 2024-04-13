@@ -1,3 +1,5 @@
+// Storage package contains the declaration and implementation of the MemoryStoragerInterface, which is an abstract storage of metrics.
+// The package contains two implementations of the interface: MemoryStorage - a storage organized in RAM (map data type) and DBStorage - a storage that uses a db driver (postgres)
 package storage
 
 import (
@@ -27,11 +29,12 @@ type FileStorage struct {
 	FilePath string `json:"-"`
 }
 
+// NewStorage initialize storage and return MemoryStoragerInterface.
 func NewStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
 	var sLogger = logger.NewLogger()
 	var memStor MemoryStoragerInterface
 
-	if cfg.DatabaseDSN != "" { //Init memory as DB
+	if cfg.DatabaseDSN != "" { // init memory as DB
 		ctxTimeOut, cancel := context.WithTimeout(context.Background(), cfg.DefaultCtxTimeout)
 		defer cancel()
 
@@ -41,10 +44,10 @@ func NewStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInter
 		}
 		memStor = &DBStorage{DB: db.DB}
 
-	} else { //Init memory as struct in memory
+	} else { // init memory as struct in memory
 		memStor = &MemoryStorage{Gauges: make(map[string]Gauge), Counters: make(map[string]Counter)}
 
-		if cfg.StoreFile != "" { //Init memory as file storage and struct
+		if cfg.StoreFile != "" { // init memory as file storage and struct
 			if cfg.StoreInterval > 0 {
 				RunStoreToFileRoutine(ctx, memStor, cfg.StoreFile, cfg.StoreInterval)
 			} else {
@@ -61,7 +64,7 @@ func NewStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInter
 	return memStor
 }
 
-// add StoreToFile with AddNewCounter - sync mode if i set 0
+// AddNewCounter add StoreToFile. Sync mode if i set 0
 func (s *FileStorage) AddNewCounter(ctx context.Context, k string, c Counter) error {
 	var sLogger = logger.NewLogger()
 	s.MemoryStoragerInterface.AddNewCounter(ctx, k, c)
@@ -73,7 +76,7 @@ func (s *FileStorage) AddNewCounter(ctx context.Context, k string, c Counter) er
 	return nil
 }
 
-// add StoreToFile with UpdateGauge - sync mode if i set 0
+// UpdateGauge add StoreToFile. Sync mode if i set 0
 func (s *FileStorage) UpdateGauge(ctx context.Context, k string, g Gauge) error {
 	var sLogger = logger.NewLogger()
 	s.MemoryStoragerInterface.UpdateGauge(ctx, k, g)
@@ -85,15 +88,15 @@ func (s *FileStorage) UpdateGauge(ctx context.Context, k string, g Gauge) error 
 	return nil
 }
 
+// Metrics struct JSON-form 
 type Metrics struct {
 	ID    string   `json:"id"`              // metric Name
-	MType string   `json:"type"`            // Type gauge or counter
+	MType string   `json:"type"`            // type gauge or counter
 	Delta *int64   `json:"delta,omitempty"` // pointer on CountValue (pointer need for check on nil)
 	Value *float64 `json:"value,omitempty"` // pointer on GaugeValue (pointer need for check on nil)
 }
 
-// Analog CRUD DB operations in memory
-// create Memory interface{}
+// MemoryStoragerInterface. It create Memory interface{}
 type MemoryStoragerInterface interface {
 	AddNewCounter(ctx context.Context, key string, value Counter) error
 	GetAllCounters(ctx context.Context) (map[string]Counter, error)
@@ -105,10 +108,12 @@ type MemoryStoragerInterface interface {
 	AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics) error
 }
 
+// DBPing - method stub (storage in memory).
 func (st *MemoryStorage) DBPing(ctx context.Context) error {
 	return errors.New("method is not implemented")
 }
 
+// AddNewCounter - add new counter (storage in memory).
 func (st *MemoryStorage) AddNewCounter(ctx context.Context, key string, counter Counter) error {
 	if counter != 0 {
 		st.Lock()
@@ -118,6 +123,7 @@ func (st *MemoryStorage) AddNewCounter(ctx context.Context, key string, counter 
 	return nil
 }
 
+// GetAllCounters - get all counters (storage in memory).
 func (st *MemoryStorage) GetAllCounters(ctx context.Context) (map[string]Counter, error) {
 	st.Lock()
 	defer st.Unlock()
@@ -129,6 +135,7 @@ func (st *MemoryStorage) GetAllCounters(ctx context.Context) (map[string]Counter
 	return res, nil
 }
 
+// GetAllGauges - get all gauges (storage in memory).
 func (st *MemoryStorage) GetAllGauges(ctx context.Context) (map[string]Gauge, error) {
 	st.Lock()
 	defer st.Unlock()
@@ -140,6 +147,7 @@ func (st *MemoryStorage) GetAllGauges(ctx context.Context) (map[string]Gauge, er
 	return res, nil
 }
 
+// GetCounterByKey - get counter value by key (storage in memory).
 func (st *MemoryStorage) GetCounterByKey(ctx context.Context, key string) (Counter, error) {
 	st.Lock()
 	counter, ok := st.Counters[key]
@@ -150,6 +158,7 @@ func (st *MemoryStorage) GetCounterByKey(ctx context.Context, key string) (Count
 	return counter, nil
 }
 
+// GetGaugeByKey - get gauge value by key (storage in memory).
 func (st *MemoryStorage) GetGaugeByKey(ctx context.Context, key string) (Gauge, error) {
 	st.Lock()
 	gauge, ok := st.Gauges[key]
@@ -160,6 +169,7 @@ func (st *MemoryStorage) GetGaugeByKey(ctx context.Context, key string) (Gauge, 
 	return gauge, nil
 }
 
+// UpdateGauge - update gauge value (storage in memory).
 func (st *MemoryStorage) UpdateGauge(ctx context.Context, key string, value Gauge) error {
 	st.Lock()
 	defer st.Unlock()
@@ -168,6 +178,7 @@ func (st *MemoryStorage) UpdateGauge(ctx context.Context, key string, value Gaug
 	return nil
 }
 
+// AddNewMetricsAsBatch add or update metrics (storage in memory). 
 func (st *MemoryStorage) AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics) error {
 	for _, metric := range metrics {
 		switch metric.MType {
@@ -188,7 +199,7 @@ func (st *MemoryStorage) AddNewMetricsAsBatch(ctx context.Context, metrics []Met
 	return nil
 }
 
-// operations with file (store data in file)
+// RestoreFromFile read from file and JSON-decode data in storage.
 func RestoreFromFile(memStor MemoryStoragerInterface, filePath string) error {
 	fm, err := os.Open(filePath)
 	if err != nil {
@@ -198,6 +209,7 @@ func RestoreFromFile(memStor MemoryStoragerInterface, filePath string) error {
 	return json.NewDecoder(fm).Decode(&memStor)
 }
 
+// StoreToFile write in file JSON-encode data from storage.
 func StoreToFile(memStor MemoryStoragerInterface, filePath string) error {
 	fm, err := os.Create(filePath)
 	if err != nil {
@@ -207,6 +219,7 @@ func StoreToFile(memStor MemoryStoragerInterface, filePath string) error {
 	return json.NewEncoder(fm).Encode(&memStor)
 }
 
+// RunStoreToFileRoutine routine what write data in file.
 func RunStoreToFileRoutine(ctx context.Context, memStor MemoryStoragerInterface, filePath string, storeInterval time.Duration) {
 	var sLogger = logger.NewLogger()
 
@@ -226,11 +239,12 @@ func RunStoreToFileRoutine(ctx context.Context, memStor MemoryStoragerInterface,
 	}()
 }
 
-// handler template/html storage
+// Pagecontent for template/html storage.
 type Pagecontent struct {
 	AllMetrics []Metric
 }
 
+// Metric for template/html storage.
 type Metric struct {
 	Name  string
 	Value string
