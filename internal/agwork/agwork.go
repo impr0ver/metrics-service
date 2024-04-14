@@ -22,18 +22,6 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
-type Semaphore struct {
-	C chan struct{}
-}
-
-func (s *Semaphore) Acquire() {
-	s.C <- struct{}{}
-}
-
-func (s *Semaphore) Release() {
-	<-s.C
-}
-
 func SetRTMetrics(metrics *agmemory.AgMemory, mu *sync.RWMutex) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var rtm runtime.MemStats
@@ -138,7 +126,7 @@ func SendMetricsJSON(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, si
 	fullURL := fmt.Sprintf("http://%s/update/", URL)
 	var agMetrics agmemory.Metrics
 
-	//prepare and send gauges
+	// prepare and send gauges
 	for key, value := range metricData {
 		agMetrics.Value = (*float64)(&value)
 		agMetrics.MType = "gauge"
@@ -155,7 +143,8 @@ func SendMetricsJSON(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, si
 
 		res.Body.Close()
 	}
-	//prepare and send counter
+
+	// prepare and send counter
 	agMetrics.ID = "PollCount"
 	agMetrics.MType = "counter"
 	agMetrics.Value = nil
@@ -176,7 +165,7 @@ func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL strin
 	mu.RLock()
 	defer mu.RUnlock()
 
-	//init semaphore with RATE_LIMIT
+	// init semaphore with RATE_LIMIT
 	sem := agconfig.NewSemaphore(rateLimit)
 
 	metricData := memory.RuntimeMetrics
@@ -186,7 +175,7 @@ func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL strin
 	var agMetrics agmemory.Metrics
 	agMetricsArray := make([]agmemory.Metrics, 0)
 
-	//prepare gauges metrics
+	// prepare gauges metrics
 	for key, value := range metricData {
 		val := new(float64)
 		*val = float64(value)
@@ -196,14 +185,14 @@ func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL strin
 		agMetricsArray = append(agMetricsArray, agMetrics)
 	}
 
-	//prepare counter metric
+	// prepare counter metric
 	agMetrics.ID = "PollCount"
 	agMetrics.MType = "counter"
 	agMetrics.Value = nil
 	agMetrics.Delta = (*int64)(&pollCount)
 	agMetricsArray = append(agMetricsArray, agMetrics)
 
-	//some checks
+	// some checks
 	agMetricsLenght := len(agMetricsArray)
 	if agMetricsLenght < rateLimit {
 		rateLimit = agMetricsLenght
@@ -212,7 +201,7 @@ func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL strin
 
 	w := 0
 	if rateLimit > 1 {
-		//worker pool
+		// worker pool
 		for w = 0; w < rateLimit-1; w++ {
 			go worker(sem, agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey)
 		}
@@ -244,7 +233,7 @@ func sendRequest(method, contentType, url string, body *bytes.Buffer, signKey st
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Add("Content-Encoding", "gzip")
 
-	//check if KEY is exists and sign plainttext with SHA256 algoritm
+	// check if KEY is exists and sign plainttext with SHA256 algoritm
 	hash, err := crypt.SignDataWithSHA256(body.Bytes(), signKey)
 	if err == nil {
 		req.Header.Add("HashSHA256", hash)
