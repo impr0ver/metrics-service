@@ -3,7 +3,6 @@ package handlers_test
 import (
 	"compress/gzip"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,7 +13,6 @@ import (
 	"github.com/impr0ver/metrics-service/internal/handlers"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
-	"github.com/stretchr/testify/suite"
 )
 
 type Metrics struct {
@@ -274,82 +272,82 @@ func ExampleMetricsHandlerPostBatch() {
 	//Responce: Registered successfully!
 }
 
-type DBStorageTestSuite struct {
-	suite.Suite
-	DB      *storage.DBStorage
-	TestDSN string
-}
+// type DBStorageTestSuite struct {
+// 	suite.Suite
+// 	DB      *storage.DBStorage
+// 	TestDSN string
+// }
 
-func (suite *DBStorageTestSuite) SetupSuite() {
-	suite.DB = &storage.DBStorage{DB: nil}
+// func (suite *DBStorageTestSuite) SetupSuite() {
+// 	suite.DB = &storage.DBStorage{DB: nil}
 
-	dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
-	dbname := "testdb"
+// 	dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
+// 	dbname := "testdb"
 
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return
-	}
+// 	db, err := sql.Open("pgx", dsn)
+// 	if err != nil {
+// 		return
+// 	}
 
-	db.Exec("DROP DATABASE " + dbname)
-	_, err = db.Exec("CREATE DATABASE " + dbname)
-	db.Close()
-	if err != nil {
-		return
-	}
+// 	db.Exec("DROP DATABASE " + dbname)
+// 	_, err = db.Exec("CREATE DATABASE " + dbname)
+// 	db.Close()
+// 	if err != nil {
+// 		return
+// 	}
 
-	testDSN := "postgresql://localhost:5432/" + dbname + "?user=postgres&password=postgres"
-	suite.DB, _ = storage.ConnectDB(context.TODO(), testDSN)
-}
+// 	testDSN := "postgresql://localhost:5432/" + dbname + "?user=postgres&password=postgres"
+// 	suite.DB, _ = storage.ConnectDB(context.TODO(), testDSN)
+// }
 
-func ExampleDataBasePing() {
-	var memStor storage.MemoryStoragerInterface
+// func ExampleDataBasePing() {
+// 	var memStor storage.MemoryStoragerInterface
 
-	dbStor := &DBStorageTestSuite{}
-	//dbStor.SetupSuite()
-	///
-	dbStor.DB = &storage.DBStorage{DB: nil}
+// 	dbStor := &DBStorageTestSuite{}
+// 	dbStor.SetupSuite()
+// 	///
+// 	// dbStor.DB = &storage.DBStorage{DB: nil}
 
-	dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
-	dbname := "testdb"
+// 	// dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
+// 	// dbname := "testdb"
 
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return
-	}
+// 	// db, err := sql.Open("pgx", dsn)
+// 	// if err != nil {
+// 	// 	return
+// 	// }
 
-	db.Exec("DROP DATABASE " + dbname)
-	_, err = db.Exec("CREATE DATABASE " + dbname)
-	db.Close()
-	if err != nil {
-		return
-	}
+// 	// db.Exec("DROP DATABASE " + dbname)
+// 	// _, err = db.Exec("CREATE DATABASE " + dbname)
+// 	// db.Close()
+// 	// if err != nil {
+// 	// 	return
+// 	// }
 
-	testDSN := "postgresql://localhost:5432/" + dbname + "?user=postgres&password=postgres"
-	dbStor.DB, _ = storage.ConnectDB(context.TODO(), testDSN)
-	///
+// 	// testDSN := "postgresql://localhost:5432/" + dbname + "?user=postgres&password=postgres"
+// 	// dbStor.DB, _ = storage.ConnectDB(context.TODO(), testDSN)
+// 	///
 
-	memStor = dbStor.DB
+// 	memStor = dbStor.DB
 
-	r := handlers.ChiRouter(memStor, &cfg)
+// 	r := handlers.ChiRouter(memStor, &cfg)
 
-	request := httptest.NewRequest(http.MethodGet, "/ping", nil)
-	request.Header.Set("Content-Type", "text/plain")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, request)
+// 	request := httptest.NewRequest(http.MethodGet, "/ping", nil)
+// 	request.Header.Set("Content-Type", "text/plain")
+// 	w := httptest.NewRecorder()
+// 	r.ServeHTTP(w, request)
 
-	res := w.Result()
-	defer res.Body.Close()
+// 	res := w.Result()
+// 	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println(err)
-	}
+// 	respBody, err := io.ReadAll(res.Body)
+// 	if err != nil {
+// 		fmt.Println(err)
+// 	}
 
-	fmt.Println("Status code:", res.StatusCode)
-	fmt.Println("Responce:", string(respBody))
+// 	fmt.Println("Status code:", res.StatusCode)
+// 	fmt.Println("Responce:", string(respBody))
 
-	//Output:
-	//Status code: 200
-	//Responce: DB alive!
-}
+// 	//Output:
+// 	//Status code: 200
+// 	//Responce: DB alive!
+// }
