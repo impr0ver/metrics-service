@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"github.com/impr0ver/metrics-service/internal/handlers"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
+	"github.com/stretchr/testify/suite"
 )
 
 type Metrics struct {
@@ -272,7 +274,7 @@ func ExampleMetricsHandlerPostBatch() {
 	//Responce: Registered successfully!
 }
 
-/*type DBStorageTestSuite struct {
+type DBStorageTestSuite struct {
 	suite.Suite
 	DB      *storage.DBStorage
 	TestDSN string
@@ -304,8 +306,29 @@ func ExampleDataBasePing() {
 	var memStor storage.MemoryStoragerInterface
 
 	dbStor := &DBStorageTestSuite{}
+	//dbStor.SetupSuite()
+	///
+	dbStor.DB = &storage.DBStorage{DB: nil}
 
-	dbStor.SetupSuite()
+	dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
+	dbname := "testdb"
+
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return
+	}
+
+	db.Exec("DROP DATABASE " + dbname)
+	_, err = db.Exec("CREATE DATABASE " + dbname)
+	db.Close()
+	if err != nil {
+		return
+	}
+
+	testDSN := "postgresql://localhost:5432/" + dbname + "?user=postgres&password=postgres"
+	dbStor.DB, _ = storage.ConnectDB(context.TODO(), testDSN)
+	///
+
 	memStor = dbStor.DB
 
 	r := handlers.ChiRouter(memStor, &cfg)
@@ -329,4 +352,4 @@ func ExampleDataBasePing() {
 	//Output:
 	//Status code: 200
 	//Responce: DB alive!
-}*/
+}
