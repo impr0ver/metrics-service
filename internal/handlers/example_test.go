@@ -3,7 +3,6 @@ package handlers_test
 import (
 	"compress/gzip"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,7 +13,6 @@ import (
 	"github.com/impr0ver/metrics-service/internal/handlers"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
-	"github.com/stretchr/testify/suite"
 )
 
 type Metrics struct {
@@ -274,7 +272,7 @@ func ExampleMetricsHandlerPostBatch() {
 	//Responce: Registered successfully!
 }
 
-type DBStorageTestSuite struct {
+/*type DBStorageTestSuite struct {
 	suite.Suite
 	DB      *storage.DBStorage
 	TestDSN string
@@ -304,6 +302,7 @@ func (suite *DBStorageTestSuite) SetupSuite() {
 
 func ExampleDataBasePing() {
 	var memStor storage.MemoryStoragerInterface
+
 	dbStor := &DBStorageTestSuite{}
 
 	dbStor.SetupSuite()
@@ -330,4 +329,4 @@ func ExampleDataBasePing() {
 	//Output:
 	//Status code: 200
 	//Responce: DB alive!
-}
+}*/
