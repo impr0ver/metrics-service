@@ -13,6 +13,7 @@ import (
 	"github.com/impr0ver/metrics-service/internal/handlers"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
+	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 )
 
 type Metrics struct {
@@ -272,82 +273,53 @@ func ExampleMetricsHandlerPostBatch() {
 	//Responce: Registered successfully!
 }
 
-// type DBStorageTestSuite struct {
-// 	suite.Suite
-// 	DB      *storage.DBStorage
-// 	TestDSN string
-// }
+func testConnectDB(ctx context.Context) (*storage.DBStorage, error) {
+	dbs := &storage.DBStorage{}
 
-// func (suite *DBStorageTestSuite) SetupSuite() {
-// 	suite.DB = &storage.DBStorage{DB: nil}
+	db, _, err := sqlmock.New()
+	if err != nil {
+		panic(err)
+	}
 
-// 	dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
-// 	dbname := "testdb"
+	dbs.DB = db
 
-// 	db, err := sql.Open("pgx", dsn)
-// 	if err != nil {
-// 		return
-// 	}
+	err = dbs.DB.PingContext(ctx)
+	if err != nil {
+		return dbs, err
+	}
 
-// 	db.Exec("DROP DATABASE " + dbname)
-// 	_, err = db.Exec("CREATE DATABASE " + dbname)
-// 	db.Close()
-// 	if err != nil {
-// 		return
-// 	}
+	return dbs, err
+}
 
-// 	testDSN := "postgresql://localhost:5432/" + dbname + "?user=postgres&password=postgres"
-// 	suite.DB, _ = storage.ConnectDB(context.TODO(), testDSN)
-// }
+func ExampleDataBasePing() {
+	var memStor storage.MemoryStoragerInterface
 
-// func ExampleDataBasePing() {
-// 	var memStor storage.MemoryStoragerInterface
+	testDB, err := testConnectDB(context.TODO())
+	if err != nil {
+		fmt.Println(err)
+	}
 
-// 	dbStor := &DBStorageTestSuite{}
-// 	dbStor.SetupSuite()
-// 	///
-// 	// dbStor.DB = &storage.DBStorage{DB: nil}
+	memStor = testDB
 
-// 	// dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
-// 	// dbname := "testdb"
+	r := handlers.ChiRouter(memStor, &cfg)
 
-// 	// db, err := sql.Open("pgx", dsn)
-// 	// if err != nil {
-// 	// 	return
-// 	// }
+	request := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	request.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, request)
 
-// 	// db.Exec("DROP DATABASE " + dbname)
-// 	// _, err = db.Exec("CREATE DATABASE " + dbname)
-// 	// db.Close()
-// 	// if err != nil {
-// 	// 	return
-// 	// }
+	res := w.Result()
+	defer res.Body.Close()
 
-// 	// testDSN := "postgresql://localhost:5432/" + dbname + "?user=postgres&password=postgres"
-// 	// dbStor.DB, _ = storage.ConnectDB(context.TODO(), testDSN)
-// 	///
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
+	}
 
-// 	memStor = dbStor.DB
+	fmt.Println("Status code:", res.StatusCode)
+	fmt.Println("Responce:", string(respBody))
 
-// 	r := handlers.ChiRouter(memStor, &cfg)
-
-// 	request := httptest.NewRequest(http.MethodGet, "/ping", nil)
-// 	request.Header.Set("Content-Type", "text/plain")
-// 	w := httptest.NewRecorder()
-// 	r.ServeHTTP(w, request)
-
-// 	res := w.Result()
-// 	defer res.Body.Close()
-
-// 	respBody, err := io.ReadAll(res.Body)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 	}
-
-// 	fmt.Println("Status code:", res.StatusCode)
-// 	fmt.Println("Responce:", string(respBody))
-
-// 	//Output:
-// 	//Status code: 200
-// 	//Responce: DB alive!
-// }
+	//Output:
+	//Status code: 200
+	//Responce: DB alive!
+}

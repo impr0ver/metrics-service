@@ -400,6 +400,35 @@ func TestMetricsHandlerPostBatch(t *testing.T) {
 	assert.Equal(t, string(respBody), "Registered successfully!")
 }
 
+func TestDataBasePing(t *testing.T) {
+	var memStor storage.MemoryStoragerInterface
+
+	testDB, err := testConnectDB(context.TODO())
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	memStor = testDB
+
+	r := handlers.ChiRouter(memStor, &cfg)
+
+	request := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	request.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, request)
+
+	res := w.Result()
+	defer res.Body.Close()
+
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	assert.Equal(t, res.StatusCode, 200)
+	assert.Equal(t, string(respBody), "DB alive!")
+}
+
 // BenchmarkMetricsHandlerPostBatch test.
 func BenchmarkMetricsHandlerPostBatch(b *testing.B) {
 	testJSON := `[{ "id": "MCacheSys", "type": "gauge", "value": 15600 },
