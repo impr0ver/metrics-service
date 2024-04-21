@@ -230,12 +230,12 @@ func ExampleMetricsHandlerPost() {
 	}
 
 	fmt.Println("Status code:", res.StatusCode)
-	fmt.Println("Responce:", string(respBody))
+	fmt.Println("Response:", string(respBody))
 
 	//Output:
 	//reqMetrics gauge OtherSys 5557552.000000
 	//Status code: 200
-	//Responce: Registered successfully!
+	//Response: Registered successfully!
 }
 
 func ExampleMetricsHandlerPostBatch() {
@@ -266,11 +266,11 @@ func ExampleMetricsHandlerPostBatch() {
 	}
 
 	fmt.Println("Status code:", res.StatusCode)
-	fmt.Println("Responce:", string(respBody))
+	fmt.Println("Response:", string(respBody))
 
 	//Output:
 	//Status code: 200
-	//Responce: Registered successfully!
+	//Response: Registered successfully!
 }
 
 func testConnectDB(ctx context.Context) (*storage.DBStorage, error) {
@@ -317,9 +317,9 @@ func ExampleDataBasePing() {
 	}
 
 	fmt.Println("Status code:", res.StatusCode)
-	fmt.Println("Responce:", string(respBody))
+	fmt.Println("Response:", string(respBody))
 
 	//Output:
 	//Status code: 200
-	//Responce: DB alive!
+	//Response: DB alive!
 }
