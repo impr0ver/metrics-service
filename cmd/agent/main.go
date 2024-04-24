@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -10,7 +11,21 @@ import (
 	"github.com/impr0ver/metrics-service/internal/logger"
 )
 
+var (
+	buildVersion string = "N/A"
+	buildDate    string = "N/A"
+	buildCommit  string = "N/A"
+)
+
+// go build -o cmd/agent/agent -ldflags="-X 'main.buildVersion=v9.19' -X 'main.buildDate=$(date +'%Y/%m/%d %H:%M:%S')'" cmd/agent/main.go
+func buildInfo() {
+	fmt.Println("Build version: ", buildVersion)
+	fmt.Println("Build date: ", buildDate)
+	fmt.Println("Build commit: ", buildCommit)
+}
+
 func main() {
+	buildInfo()
 	var agMemory = agmemory.NewAgMemory()
 	var mu sync.RWMutex
 	var wg sync.WaitGroup

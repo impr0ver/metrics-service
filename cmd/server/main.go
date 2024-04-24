@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -15,7 +16,21 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var (
+	buildVersion string = "N/A"
+	buildDate    string = "N/A"
+	buildCommit  string = "N/A"
+)
+
+// go build -o cmd/server/server -ldflags="-X 'main.buildVersion=v9.19' -X 'main.buildDate=$(date +'%Y/%m/%d %H:%M:%S')'" cmd/server/main.go
+func buildInfo() {
+	fmt.Println("Build version: ", buildVersion)
+	fmt.Println("Build date: ", buildDate)
+	fmt.Println("Build commit: ", buildCommit)
+}
+
 func main() {
+	buildInfo()
 	var sLogger = logger.NewLogger()
 	cfg := servconfig.ParseParameters()
 	ctx, cancel := context.WithCancel(context.Background())
