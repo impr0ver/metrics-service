@@ -9,9 +9,19 @@ import (
 	"github.com/caarlos0/env/v6"
 )
 
-type Semaphore struct {
-	C chan struct{}
-}
+type (
+	Semaphore struct {
+		C chan struct{}
+	}
+
+	Config struct {
+		Address        string `env:"ADDRESS"`
+		PollInterval   int    `env:"POLL_INTERVAL"`
+		ReportInterval int    `env:"REPORT_INTERVAL"`
+		Key            string `env:"KEY"`
+		RateLimit      int    `env:"RATE_LIMIT"`
+	}
+)
 
 func (s *Semaphore) Acquire() {
 	s.C <- struct{}{}
@@ -23,14 +33,6 @@ func (s *Semaphore) Release() {
 
 func NewSemaphore(rateLimit int) *Semaphore {
 	return &Semaphore{C: make(chan struct{}, rateLimit)}
-}
-
-type Config struct {
-	Address        string `env:"ADDRESS"`
-	PollInterval   int    `env:"POLL_INTERVAL"`
-	ReportInterval int    `env:"REPORT_INTERVAL"`
-	Key            string `env:"KEY"`
-	RateLimit      int    `env:"RATE_LIMIT"`
 }
 
 func InitConfig() Config {

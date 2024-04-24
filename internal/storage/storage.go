@@ -15,19 +15,52 @@ import (
 	"github.com/impr0ver/metrics-service/internal/servconfig"
 )
 
-type Gauge float64
-type Counter int64
+type (
+	Gauge   float64
+	Counter int64
 
-type MemoryStorage struct {
-	sync.Mutex
-	Gauges   map[string]Gauge
-	Counters map[string]Counter
-}
+	MemoryStorage struct {
+		sync.Mutex
+		Gauges   map[string]Gauge
+		Counters map[string]Counter
+	}
 
-type FileStorage struct {
-	MemoryStoragerInterface
-	FilePath string `json:"-"`
-}
+	FileStorage struct {
+		MemoryStoragerInterface
+		FilePath string `json:"-"`
+	}
+
+	// Metrics struct JSON-form
+	Metrics struct {
+		ID    string   `json:"id"`              // metric Name
+		MType string   `json:"type"`            // type gauge or counter
+		Delta *int64   `json:"delta,omitempty"` // pointer on CountValue (pointer need for check on nil)
+		Value *float64 `json:"value,omitempty"` // pointer on GaugeValue (pointer need for check on nil)
+	}
+
+	// MemoryStoragerInterface. It create Memory interface{}
+	MemoryStoragerInterface interface {
+		AddNewCounter(ctx context.Context, key string, value Counter) error
+		GetAllCounters(ctx context.Context) (map[string]Counter, error)
+		GetAllGauges(ctx context.Context) (map[string]Gauge, error)
+		GetCounterByKey(ctx context.Context, key string) (Counter, error)
+		GetGaugeByKey(ctx context.Context, key string) (Gauge, error)
+		UpdateGauge(ctx context.Context, key string, value Gauge) error
+		DBPing(ctx context.Context) error
+		AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics) error
+	}
+
+	// Pagecontent for template/html storage.
+	Pagecontent struct {
+		AllMetrics []Metric
+	}
+
+	// Metric for template/html storage.
+	Metric struct {
+		Name  string
+		Value string
+	}
+)
 
 // NewStorage initialize storage and return MemoryStoragerInterface.
 func NewStorage(ctx context.Context, cfg *servconfig.Config) MemoryStoragerInterface {
@@ -86,26 +119,6 @@ func (s *FileStorage) UpdateGauge(ctx context.Context, k string, g Gauge) error 
 		return err
 	}
 	return nil
-}
-
-// Metrics struct JSON-form 
-type Metrics struct {
-	ID    string   `json:"id"`              // metric Name
-	MType string   `json:"type"`            // type gauge or counter
-	Delta *int64   `json:"delta,omitempty"` // pointer on CountValue (pointer need for check on nil)
-	Value *float64 `json:"value,omitempty"` // pointer on GaugeValue (pointer need for check on nil)
-}
-
-// MemoryStoragerInterface. It create Memory interface{}
-type MemoryStoragerInterface interface {
-	AddNewCounter(ctx context.Context, key string, value Counter) error
-	GetAllCounters(ctx context.Context) (map[string]Counter, error)
-	GetAllGauges(ctx context.Context) (map[string]Gauge, error)
-	GetCounterByKey(ctx context.Context, key string) (Counter, error)
-	GetGaugeByKey(ctx context.Context, key string) (Gauge, error)
-	UpdateGauge(ctx context.Context, key string, value Gauge) error
-	DBPing(ctx context.Context) error
-	AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics) error
 }
 
 // DBPing - method stub (storage in memory).
@@ -178,7 +191,7 @@ func (st *MemoryStorage) UpdateGauge(ctx context.Context, key string, value Gaug
 	return nil
 }
 
-// AddNewMetricsAsBatch add or update metrics (storage in memory). 
+// AddNewMetricsAsBatch add or update metrics (storage in memory).
 func (st *MemoryStorage) AddNewMetricsAsBatch(ctx context.Context, metrics []Metrics) error {
 	for _, metric := range metrics {
 		switch metric.MType {
@@ -237,15 +250,4 @@ func RunStoreToFileRoutine(ctx context.Context, memStor MemoryStoragerInterface,
 			}
 		}
 	}()
-}
-
-// Pagecontent for template/html storage.
-type Pagecontent struct {
-	AllMetrics []Metric
-}
-
-// Metric for template/html storage.
-type Metric struct {
-	Name  string
-	Value string
 }

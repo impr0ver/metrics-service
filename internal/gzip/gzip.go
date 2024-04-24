@@ -7,6 +7,18 @@ import (
 	"net/http"
 )
 
+type (
+	CompressWriter struct {
+		Writer     http.ResponseWriter
+		GzipWriter *gzip.Writer
+	}
+
+	CompressReader struct {
+		Reader     io.ReadCloser
+		GzipReader *gzip.Reader
+	}
+)
+
 func CompressJSON(w io.Writer, i interface{}) error {
 	gz := gzip.NewWriter(w)
 	if err := json.NewEncoder(gz).Encode(i); err != nil {
@@ -18,11 +30,6 @@ func CompressJSON(w io.Writer, i interface{}) error {
 func CompressTextHTML(w io.Writer) *gzip.Writer {
 	gz := gzip.NewWriter(w)
 	return gz
-}
-
-type CompressWriter struct {
-	Writer     http.ResponseWriter
-	GzipWriter *gzip.Writer
 }
 
 func NewCompressWriter(w http.ResponseWriter) *CompressWriter {
@@ -49,11 +56,6 @@ func (c *CompressWriter) WriteHeader(statusCode int) {
 
 func (c *CompressWriter) Close() error {
 	return c.GzipWriter.Close()
-}
-
-type CompressReader struct {
-	Reader     io.ReadCloser
-	GzipReader *gzip.Reader
 }
 
 func NewCompressReader(r io.ReadCloser) (*CompressReader, error) {

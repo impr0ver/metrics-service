@@ -7,16 +7,6 @@ import (
 	"time"
 )
 
-const (
-	DefaultListenAddr    = "localhost:8080"
-	DefaultStoreInterval = 300 * time.Second
-	DefaultStoreFile     = "/tmp/metrics-db.json"
-	RestoreTrue          = true
-	DefaultDSN           = "" //user=postgres password=karat911 host=localhost port=5432 dbname=metrics sslmode=disable
-	DefaultCtxTimeout    = 20 * time.Second
-	DefaultKey           = ""
-)
-
 type Config struct {
 	ListenAddr        string
 	StoreInterval     time.Duration
@@ -26,6 +16,16 @@ type Config struct {
 	DefaultCtxTimeout time.Duration
 	Key               string
 }
+
+const (
+	DefaultListenAddr    = "localhost:8080"
+	DefaultStoreInterval = 300 * time.Second
+	DefaultStoreFile     = "/tmp/metrics-db.json"
+	RestoreTrue          = true
+	DefaultDSN           = "" //user=postgres password=karat911 host=localhost port=5432 dbname=metrics sslmode=disable
+	DefaultCtxTimeout    = 20 * time.Second
+	DefaultKey           = ""
+)
 
 func ParseParameters() Config {
 	var cfg Config

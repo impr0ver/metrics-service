@@ -49,6 +49,7 @@ func TestGzipMiddleware(t *testing.T) {
 		Counters: make(map[string]storage.Counter)}
 	memstorage.UpdateGauge(context.TODO(), "Alloc", 555.34)
 	memstorage.AddNewCounter(context.TODO(), "MyCounter", 95)
+	
 	var cfg = servconfig.Config{}
 
 	for _, tt := range tests {

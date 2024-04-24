@@ -23,10 +23,12 @@ type Metrics struct {
 	Value *float64 `json:"value,omitempty"` //gaugeValue
 }
 
-var memstorage = storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
-	Counters: make(map[string]storage.Counter)}
+var (
+	memstorage = storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
 
-var cfg = servconfig.Config{}
+	cfg = servconfig.Config{}
+)
 
 func ExampleMetricsHandlerGetJSON() {
 	var metric Metrics

@@ -6,6 +6,18 @@ import (
 	"go.uber.org/zap"
 )
 
+type (
+	ResponseData struct {
+		Status int
+		Size   int
+	}
+
+	LoggingResponseWriter struct {
+		http.ResponseWriter //original http.ResponseWriter
+		ResponseData        *ResponseData
+	}
+)
+
 func NewLogger() *zap.SugaredLogger {
 
 	logger, err := zap.NewDevelopment()
@@ -17,17 +29,6 @@ func NewLogger() *zap.SugaredLogger {
 	//SugaredLogger registrator
 	sugar := *logger.Sugar()
 	return &sugar
-}
-
-// Overriding two methods from an interface
-type ResponseData struct {
-	Status int
-	Size   int
-}
-
-type LoggingResponseWriter struct {
-	http.ResponseWriter //original http.ResponseWriter
-	ResponseData        *ResponseData
 }
 
 func NewResponceWriterWithLogging(w http.ResponseWriter) *LoggingResponseWriter {

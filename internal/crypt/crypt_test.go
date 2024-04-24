@@ -1,9 +1,8 @@
-package crypt_test
+package crypt
 
 import (
 	"testing"
 
-	"github.com/impr0ver/metrics-service/internal/crypt"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,11 +23,32 @@ func TestSignDataWithSHA256(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hash, err := crypt.SignDataWithSHA256([]byte(tt.plainText), tt.key)
+			hash, err := SignDataWithSHA256([]byte(tt.plainText), tt.key)
 			if err != nil {
 				t.Fatalf("Failed sign data: %s - %s", []byte(tt.plainText), err.Error())
 			}
 			assert.Equal(t, hash, tt.want)
+		})
+	}
+}
+
+func TestCheckHashSHA256(t *testing.T) {
+	tests := []struct {
+		name string
+		hash string
+		want string
+	}{
+		{"test #1", "1b02ac62e12780a078820ff0e4b46054b5a87d579b67d0b9d97ae740767d4d27", "1b02ac62e12780a078820ff0e4b46054b5a87d579b67d0b9d97ae740767d4d27"},
+		{"test #2", "49681c3bbfd59c670ee8ee2e74d52a6b8dc41c40ff55076cab8dd8bca0477a3e", "49681c3bbfd59c670ee8ee2e74d52a6b8dc41c40ff55076cab8dd8bca0477a3e"},
+		{"test #3", "9eda81ff0223b02a4b70aa60367d8bae1cd71791793e019780fb91a401e55347", "9eda81ff0223b02a4b70aa60367d8bae1cd71791793e019780fb91a401e55347"},
+		{"test #4", "12345", "12345"},
+		{"test #5", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := CheckHashSHA256(tt.hash, tt.want)
+			assert.Equal(t, res, true)
 		})
 	}
 }
