@@ -3,26 +3,18 @@ package storage_test
 import (
 	"bufio"
 	"context"
-	"database/sql"
 	"log"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/impr0ver/metrics-service/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
-type DBStorageTestSuite struct {
-	suite.Suite
-	DB      *storage.DBStorage
-	TestDSN string
-}
-
-func TestMemory(t *testing.T) {
+func TestMemoryStorage(t *testing.T) {
 	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge), Counters: make(map[string]storage.Counter)}
 
 	tests := []struct {
@@ -164,190 +156,192 @@ func TestRestoreFromFile(t *testing.T) {
 	os.Remove(filePath)
 }
 
-func (suite *DBStorageTestSuite) SetupSuite() {
-	suite.DB = &storage.DBStorage{DB: nil}
-
-	dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
-	dbname := "testdb"
-
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return
-	}
-
-	db.Exec("DROP DATABASE " + dbname)
-	_, err = db.Exec("CREATE DATABASE " + dbname)
-	db.Close()
-	if err != nil {
-		return
-	}
-
-	testDSN := "postgresql://localhost:5432/" + dbname + "?user=postgres&password=postgres"
-	suite.DB, _ = storage.ConnectDB(context.TODO(), testDSN)
-}
-
-func (suite *DBStorageTestSuite) TestDBStorageAddCounterAndGetCounter() {
-	ctx := context.Background()
-
-	tests := []struct {
-		name  string
-		key   string
-		value storage.Counter
-		want  storage.Counter
-	}{
-		{"test#1", "CounterA", 555, 555},
-		{"test#2", "CounterB", 100, 100},
-		{"test#3", "CounterB", 100, 200},
-		{"test#4", "CounterB", 100, 300},
-	}
-	for _, tt := range tests {
-		suite.Run(tt.name, func() {
-			err := suite.DB.AddNewCounter(ctx, tt.key, tt.value)
-			suite.NoError(err, tt.name+" failed")
-
-			res, err := suite.DB.GetCounterByKey(ctx, tt.key)
-			suite.NoError(err, tt.name+", GetCounterByKey failed")
-
-			suite.Equal(storage.Counter(res), tt.want)
-		})
-	}
-}
-
-func (suite *DBStorageTestSuite) TestDBStorageUpdateGaugeAndGetGauge() {
-	ctx := context.Background()
-
-	tests := []struct {
-		name  string
+// /
+func TestUpdateGauge(t *testing.T) {
+	ctx := context.TODO()
+	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+	type args struct {
 		key   string
 		value storage.Gauge
-		want  storage.Gauge
+	}
+	type want struct {
+		key   string
+		value storage.Gauge
+		len   int
+	}
+	tests := []struct {
+		name string
+		a    args
+		w    want
 	}{
-		{"simple test #1", "Gauge1", 54321.12345, 54321.12345},
-		{"simple test #2", "Gauge2", 99.10, 99.10},
-		{"simple test #3", "Gauge3", 800000.1, 800000.1},
-		{"simple test #4", "Gauge4", 100000, 100000},
+		{"positive test #1", args{"someGauge", storage.Gauge(12345)}, want{"someGauge", storage.Gauge(12345), 1}},
+		{"positive test #2", args{"someGauge", storage.Gauge(345.55)}, want{"someGauge", storage.Gauge(345.55), 1}},
+		{"positive test #3", args{"someGauge2", storage.Gauge(789.56785)}, want{"someGauge2", storage.Gauge(789.56785), 2}},
 	}
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
-			err := suite.DB.UpdateGauge(ctx, tt.key, tt.value)
-			suite.NoError(err, tt.name+" failed")
-
-			res, err := suite.DB.GetGaugeByKey(ctx, tt.key)
-			suite.NoError(err, tt.name+", GetGaugeByKey failed")
-
-			suite.Equal(storage.Gauge(res), tt.want)
+		t.Run(tt.name, func(t *testing.T) {
+			st.UpdateGauge(ctx, tt.a.key, tt.a.value)
+			v := st.Gauges[tt.a.key]
+			require.Equal(t, tt.w.value, v)
+			l := len(st.Gauges)
+			require.Equal(t, tt.w.len, l)
 		})
 	}
 }
 
-func (suite *DBStorageTestSuite) TestDBStorageGetAllGauges() {
-	ctx := context.Background()
-
-	err := suite.DB.UpdateGauge(ctx, "GaugeA", 83584389.129845)
-	suite.NoError(err, "UpdageGauge failed")
-	err = suite.DB.UpdateGauge(ctx, "GaugeB", 19858.999)
-	suite.NoError(err, "UpdageGauge failed")
-	err = suite.DB.UpdateGauge(ctx, "GaugeC", 69694)
-	suite.NoError(err, "UpdageGauge failed")
-	err = suite.DB.UpdateGauge(ctx, "GaugeD", 945345.14848)
-	suite.NoError(err, "UpdageGauge failed")
-	err = suite.DB.UpdateGauge(ctx, "GaugeE", 968332.666)
-	suite.NoError(err, "UpdageGauge failed")
-
-	err = suite.DB.UpdateGauge(ctx, "GaugeE", 968332.667) //update 968332.666 -> 968332.667
-	suite.NoError(err, "UpdageGauge failed")
-
-	mapGauges, err := suite.DB.GetAllGauges(ctx)
-	suite.NoError(err, "GetAllGauges failed")
-	len := len(mapGauges)
-	suite.Equal(5, len)
-
-}
-
-func (suite *DBStorageTestSuite) TestDBStorageGetAllCounters() {
-	ctx := context.Background()
-	err := suite.DB.AddNewCounter(ctx, "Counter1", 5)
-	suite.NoError(err, "AddCounter failed")
-	err = suite.DB.AddNewCounter(ctx, "Counter2", 10)
-	suite.NoError(err, "AddCounter failed")
-	err = suite.DB.AddNewCounter(ctx, "Counter3", 15)
-	suite.NoError(err, "AddCounter failed")
-	err = suite.DB.AddNewCounter(ctx, "Counter4", 20)
-	suite.NoError(err, "AddCounter failed")
-	err = suite.DB.AddNewCounter(ctx, "Counter5", 25)
-	suite.NoError(err, "AddCounter failed")
-
-	err = suite.DB.AddNewCounter(ctx, "Counter5", 30) //25 + 30 = 55
-	suite.NoError(err, "AddCounter failed")
-
-	mapCounters, err := suite.DB.GetAllCounters(ctx)
-	suite.NoError(err, "GetAllCounters failed")
-	len := len(mapCounters)
-	suite.Equal(5, len)
-
-}
-
-func (suite *DBStorageTestSuite) TestAddNewMetricsAsBatch() {
-
-	counter1 := int64(10)
-	counter2 := int64(20)
-	counter3 := int64(10)
-
-	gauge1 := float64(123.234)
-	gauge2 := float64(234.345)
-
-	metrics := [5]storage.Metrics{
-		{ID: "tstMetric #1", MType: "counter", Value: nil, Delta: &counter1},
-		{ID: "tstMetric #2", MType: "counter", Value: nil, Delta: &counter2},
-		{ID: "tstMetric #2", MType: "counter", Value: nil, Delta: &counter3},
-		{ID: "tstMetric #3", MType: "gauge", Value: &gauge1, Delta: nil},
-		{ID: "tstMetric #4", MType: "gauge", Value: &gauge2, Delta: nil},
+func TestAddCounter(t *testing.T) {
+	ctx := context.TODO()
+	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+	type args struct {
+		key   string
+		value storage.Counter
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	err := suite.DB.AddNewMetricsAsBatch(ctx, metrics[:])
-	suite.NoError(err)
-
-	allCounters, err := suite.DB.GetAllCounters(ctx)
-	suite.NotNil(allCounters)
-	suite.NoError(err)
-	counterOne, ok := allCounters["tstMetric #1"]
-	suite.Equal(true, ok)
-	suite.Equal(counter1, int64(counterOne))
-	counterTwo, ok := allCounters["tstMetric #2"]
-	suite.Equal(true, ok)
-	suite.Equal(counter2+counter3, int64(counterTwo))
-
-	allGauges, err := suite.DB.GetAllGauges(ctx)
-	suite.NotNil(allGauges)
-	suite.NoError(err)
-	gaugeOne, ok := allGauges["tstMetric #3"]
-	suite.Equal(true, ok)
-	suite.Equal(gauge1, float64(gaugeOne))
-
-	gaugeTwo, ok := allGauges["tstMetric #4"]
-	suite.Equal(true, ok)
-	suite.Equal(gauge2, float64(gaugeTwo))
-
+	type want struct {
+		key   string
+		value storage.Counter
+		len   int
+	}
+	tests := []struct {
+		name string
+		a    args
+		w    want
+	}{
+		{"positive test #1", args{"someCounter", storage.Counter(10)}, want{"someCounter", storage.Counter(10), 1}},
+		{"positive test #2", args{"someCounter", storage.Counter(5)}, want{"someCounter", storage.Counter(15), 1}},
+		{"positive test #2", args{"someCounter2", storage.Counter(234)}, want{"someCounter2", storage.Counter(234), 2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st.AddNewCounter(ctx, tt.a.key, tt.a.value)
+			v := st.Counters[tt.a.key]
+			require.Equal(t, tt.w.value, v)
+			l := len(st.Counters)
+			require.Equal(t, tt.w.len, l)
+		})
+	}
 }
 
-func (suite *DBStorageTestSuite) SetupTest() {
-	suite.DB.DB.Exec("TRUNCATE Gauge, Counter CASCADE;")
+func TestGetGaugeByKey(t *testing.T) {
+	ctx := context.TODO()
+	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+	st.UpdateGauge(ctx, "key1", storage.Gauge(1234.5))
+	st.UpdateGauge(ctx, "key2", storage.Gauge(0))
+
+	tests := []struct {
+		name    string
+		keyarg  string
+		want    storage.Gauge
+		wantErr bool
+	}{
+		{"positive test #1", "key1", 1234.5, false},
+		{"positive test #2", "key2", 0, false},
+		{"positive test #3", "key3", 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := st.GetGaugeByKey(ctx, tt.keyarg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MemoryStorager.GetGaugeByKey(ctx, ) error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("MemoryStorager.GetGaugeByKey(ctx, ) = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
 
-func TestDBStorageTestSuite(t *testing.T) {
-	dsn := "postgresql://localhost:5432?user=postgres&password=postgres"
+func TestGetCounterByKey(t *testing.T) {
+	ctx := context.TODO()
+	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+	st.AddNewCounter(ctx, "key1", storage.Counter(123))
+	st.AddNewCounter(ctx, "key1", storage.Counter(1))
+	st.AddNewCounter(ctx, "key2", storage.Counter(33))
 
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return
+	tests := []struct {
+		name    string
+		keyarg  string
+		want    storage.Counter
+		wantErr bool
+	}{
+		{"positive test #1", "key1", 124, false},
+		{"positive test #2", "key2", 33, false},
+		{"positive test #3", "key3", 0, true},
 	}
-	err = db.PingContext(context.TODO())
-	if err != nil {
-		return
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := st.GetCounterByKey(ctx, tt.keyarg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MemoryStorager.GetGaugeByKey(ctx, ) error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("MemoryStorager.GetGaugeByKey(ctx, ) = %v, want %v", got, tt.want)
+			}
+		})
 	}
-	db.Close()
-	suite.Run(t, new(DBStorageTestSuite))
+}
+
+func TestGetAllCounters(t *testing.T) {
+	ctx := context.TODO()
+	stWithData := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+	stWithData.AddNewCounter(ctx, "key1", storage.Counter(1))
+	stWithData.AddNewCounter(ctx, "key2", storage.Counter(2))
+	stWithData.AddNewCounter(ctx, "key3", storage.Counter(3))
+	stWithData.AddNewCounter(ctx, "key4", storage.Counter(4))
+
+	stEmpty := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	tests := []struct {
+		name string
+		st   *storage.MemoryStorage
+	}{
+		{"#1 test with filled MemoryStorager", &stWithData},
+		{"#2 test with empty MemoryStorager", &stEmpty},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			counters, _ := tt.st.GetAllCounters(ctx)
+			require.True(t, reflect.DeepEqual(counters, tt.st.Counters))
+			counters["key1"] = 777
+			require.False(t, reflect.DeepEqual(counters, tt.st.Counters))
+
+		})
+	}
+}
+
+func TestGetAllGauges(t *testing.T) {
+	ctx := context.TODO()
+	stWithData := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+	stWithData.UpdateGauge(ctx, "key1", storage.Gauge(1.1))
+	stWithData.UpdateGauge(ctx, "key2", storage.Gauge(2.2))
+	stWithData.UpdateGauge(ctx, "key3", storage.Gauge(3.3))
+	stWithData.UpdateGauge(ctx, "key4", storage.Gauge(4.4))
+
+	stEmpty := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	tests := []struct {
+		name string
+		st   *storage.MemoryStorage
+	}{
+		{"#1 test with filled MapPollStorager", &stWithData},
+		{"#2 test with empty MapPollStorager", &stEmpty},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gauges, _ := tt.st.GetAllGauges(ctx)
+			require.True(t, reflect.DeepEqual(gauges, tt.st.Gauges))
+			gauges["key1"] = 777
+			require.False(t, reflect.DeepEqual(gauges, tt.st.Gauges))
+
+		})
+	}
 }
