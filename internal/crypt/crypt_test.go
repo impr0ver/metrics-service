@@ -19,15 +19,18 @@ func TestSignDataWithSHA256(t *testing.T) {
 		{"test #3", "1", "mytestkey", "9eda81ff0223b02a4b70aa60367d8bae1cd71791793e019780fb91a401e55347"},
 		{"test #4", "MySecretText", "mytestkey", "b611d3f1104be3638d6eb2b23bc189ac690902a95a71aad6438a4fbbc1c2f061"},
 		{"test #5", "", "mytestkey", "c12dbaf0bc80b7c08ea31cc3969ba6fd312c26bc39392dbe160f6fa7f399e375"},
+		{"test #6", "", "", "key parameter is empty"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hash, err := SignDataWithSHA256([]byte(tt.plainText), tt.key)
 			if err != nil {
-				t.Fatalf("Failed sign data: %s - %s", []byte(tt.plainText), err.Error())
+				assert.ErrorContains(t, err, tt.want)
+			} else {
+				assert.Equal(t, hash, tt.want)
 			}
-			assert.Equal(t, hash, tt.want)
+			
 		})
 	}
 }

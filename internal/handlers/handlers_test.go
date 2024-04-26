@@ -49,7 +49,7 @@ func TestGzipMiddleware(t *testing.T) {
 		Counters: make(map[string]storage.Counter)}
 	memstorage.UpdateGauge(context.TODO(), "Alloc", 555.34)
 	memstorage.AddNewCounter(context.TODO(), "MyCounter", 95)
-	
+
 	var cfg = servconfig.Config{}
 
 	for _, tt := range tests {
@@ -270,6 +270,9 @@ func TestMetricsHandlerGet(t *testing.T) {
 		{"positive test #4", "/value/gauge/MCacheInuse", "9600.000123", http.StatusOK},
 		{"positive test #5", "/value/gauge/RandomValue", "0.28", http.StatusOK},
 		{"positive test #6", "/value/gauge/GCSys", "1764408", http.StatusOK},
+
+		{"negative test #7", "/value/gauge/NoName", "Bad request!", http.StatusNotFound},
+		{"negative test #8", "/value/counter/NoName", "Bad request!", http.StatusNotFound},
 	}
 	for _, v := range testTable {
 		fmt.Printf("fullURL: %s%s", ts.URL, v.url)
@@ -346,6 +349,7 @@ func TestMetricsHandlerPost(t *testing.T) {
 		{"positive test #15", "/update/counter/testcounter/150", "Registered successfully!", http.StatusOK},
 		{"positive test #16", "/update/counter/Mycounter/0", "Registered successfully!", http.StatusOK},
 		{"negative test #17", "/update/counter/PollCount/15/this/is/interesting/test", "404 page not found\n", http.StatusNotFound}, //этот тест обрабатывает сам роутер "chi"
+		{"negative test #18", "/update/noname/PollCount/15/this/is/interesting/test", "404 page not found\n", http.StatusNotFound},
 	}
 	for _, v := range testTable {
 		fmt.Printf("fullURL: %s%s\n", ts.URL, v.url)

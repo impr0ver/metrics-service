@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -156,7 +157,6 @@ func TestRestoreFromFile(t *testing.T) {
 	os.Remove(filePath)
 }
 
-// /
 func TestUpdateGauge(t *testing.T) {
 	ctx := context.TODO()
 	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
@@ -190,7 +190,7 @@ func TestUpdateGauge(t *testing.T) {
 	}
 }
 
-func TestAddCounter(t *testing.T) {
+func TestAddNewCounter(t *testing.T) {
 	ctx := context.TODO()
 	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
@@ -221,6 +221,149 @@ func TestAddCounter(t *testing.T) {
 			require.Equal(t, tt.w.len, l)
 		})
 	}
+}
+
+func TestAddNewCounterFS(t *testing.T) {
+	ctx := context.TODO()
+
+	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	filePath := "./fstest.json"
+	fs := storage.FileStorage{MemoryStoragerInterface: &st, FilePath: filePath}
+
+	type args struct {
+		key   string
+		value storage.Counter
+	}
+	type want struct {
+		key   string
+		value storage.Counter
+		len   int
+	}
+	tests := []struct {
+		name string
+		a    args
+		w    want
+	}{
+		{"positive test #1", args{"someCounter", storage.Counter(10)}, want{"someCounter", storage.Counter(10), 1}},
+		{"positive test #2", args{"someCounter", storage.Counter(5)}, want{"someCounter", storage.Counter(15), 1}},
+		{"positive test #2", args{"someCounter2", storage.Counter(234)}, want{"someCounter2", storage.Counter(234), 2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := fs.AddNewCounter(ctx, tt.a.key, tt.a.value)
+			require.NoError(t, err)
+			v := st.Counters[tt.a.key]
+			require.Equal(t, tt.w.value, v)
+			l := len(st.Counters)
+			require.Equal(t, tt.w.len, l)
+		})
+	}
+	os.Remove(filePath)
+}
+
+func TestUpdateGaugeFS(t *testing.T) {
+	ctx := context.TODO()
+
+	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	filePath := "./fstest.json"
+	fs := storage.FileStorage{MemoryStoragerInterface: &st, FilePath: filePath}
+
+	type args struct {
+		key   string
+		value storage.Gauge
+	}
+	type want struct {
+		key   string
+		value storage.Gauge
+		len   int
+	}
+	tests := []struct {
+		name string
+		a    args
+		w    want
+	}{
+		{"positive test #1", args{"someGauge", storage.Gauge(12345)}, want{"someGauge", storage.Gauge(12345), 1}},
+		{"positive test #2", args{"someGauge", storage.Gauge(345.55)}, want{"someGauge", storage.Gauge(345.55), 1}},
+		{"positive test #3", args{"someGauge2", storage.Gauge(789.56785)}, want{"someGauge2", storage.Gauge(789.56785), 2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := fs.UpdateGauge(ctx, tt.a.key, tt.a.value)
+			require.NoError(t, err)
+			v := st.Gauges[tt.a.key]
+			require.Equal(t, tt.w.value, v)
+			l := len(st.Gauges)
+			require.Equal(t, tt.w.len, l)
+		})
+	}
+	os.Remove(filePath)
+}
+
+func TestAddNewMetricsAsBatch(t *testing.T) {
+	ctx := context.TODO()
+
+	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	counter1 := int64(10)
+	counter2 := int64(20)
+	counter3 := int64(10)
+
+	gauge1 := float64(123.234)
+	gauge2 := float64(234.345)
+
+	metrics := [5]storage.Metrics{
+		{ID: "tstMetric #1", MType: "counter", Value: nil, Delta: &counter1},
+		{ID: "tstMetric #2", MType: "counter", Value: nil, Delta: &counter2},
+		{ID: "tstMetric #2", MType: "counter", Value: nil, Delta: &counter3},
+		{ID: "tstMetric #3", MType: "gauge", Value: &gauge1, Delta: nil},
+		{ID: "tstMetric #4", MType: "gauge", Value: &gauge2, Delta: nil},
+	}
+
+	err := st.AddNewMetricsAsBatch(ctx, metrics[:])
+	require.NoError(t, err)
+
+	allCounters, err := st.GetAllCounters(ctx)
+	require.NotNil(t, allCounters)
+	require.NoError(t, err)
+	counterOne, ok := allCounters["tstMetric #1"]
+	require.Equal(t, true, ok)
+	require.Equal(t, counter1, int64(counterOne))
+	counterTwo, ok := allCounters["tstMetric #2"]
+	require.Equal(t, true, ok)
+	require.Equal(t, counter2+counter3, int64(counterTwo))
+
+	allGauges, err := st.GetAllGauges(ctx)
+	require.NotNil(t, allGauges)
+	require.NoError(t, err)
+	gaugeOne, ok := allGauges["tstMetric #3"]
+	require.Equal(t, true, ok)
+	require.Equal(t, gauge1, float64(gaugeOne))
+
+	gaugeTwo, ok := allGauges["tstMetric #4"]
+	require.Equal(t, true, ok)
+	require.Equal(t, gauge2, float64(gaugeTwo))
+
+}
+
+func TestAddNewMetricsAsBatch2(t *testing.T) {
+	ctx := context.TODO()
+
+	st := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	gauge3 := float64(666.666)
+
+	metrics := [1]storage.Metrics{
+		{ID: "tstMetric #5", MType: "noname", Value: &gauge3, Delta: nil},
+	}
+
+	err := st.AddNewMetricsAsBatch(ctx, metrics[:])
+	require.Error(t, err, "unsupported metric type")
 }
 
 func TestGetGaugeByKey(t *testing.T) {
@@ -345,3 +488,27 @@ func TestGetAllGauges(t *testing.T) {
 		})
 	}
 }
+
+func TestNewStorage(t *testing.T) {
+	ctx := context.TODO()
+	cfg := servconfig.ParseParameters()
+
+	st := storage.NewStorage(ctx, &cfg)
+
+	err := st.DBPing(ctx)
+	require.Error(t, err, "method is not implemented")
+}
+
+// func TestNewStorage2(t *testing.T) {
+// 	ctx := context.TODO()
+
+// 	os.Setenv("DATABASE_DSN", "user=postgres password=karat911 host=localhost port=5432 dbname=metrics sslmode=disable")
+// 	cfg := servconfig.ParseParameters()
+
+// 	st := storage.NewStorage(ctx, &cfg)
+
+// 	err := st.DBPing(ctx)
+// 	require.NoError(t, err)
+
+// 	os.Unsetenv("DATABASE_DSN")
+// }
