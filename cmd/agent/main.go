@@ -34,11 +34,11 @@ func main() {
 
 	var sLogger = logger.NewLogger()
 
-	pollIntTicker := time.NewTicker(time.Duration(cfg.PollInterval) * time.Second)
+	pollIntTicker := time.NewTicker(cfg.PollInterval)
 	defer pollIntTicker.Stop()
-	pollIntGopsTicker := time.NewTicker(time.Duration(cfg.PollInterval) * time.Second)
+	pollIntGopsTicker := time.NewTicker(cfg.PollInterval)
 	defer pollIntGopsTicker.Stop()
-	repIntTicker := time.NewTicker(time.Duration(cfg.ReportInterval) * time.Second)
+	repIntTicker := time.NewTicker(cfg.ReportInterval)
 	defer repIntTicker.Stop()
 
 	donePollInt := make(chan bool)
@@ -87,7 +87,7 @@ func main() {
 				return
 			case t := <-repIntTicker.C:
 				sLogger.Infoln("Send metrics data at", t.Format("04:05"))
-				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.Address, cfg.Key, cfg.RateLimit, /*///*/cfg.PublicKey)
+				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.Address, cfg.Key, cfg.RateLimit, cfg.PublicKey)
 			}
 		}
 	}()

@@ -28,15 +28,17 @@ import (
 )
 
 const (
-	mType             = "mtype"
-	mName             = "mname"
-	mValue            = "mvalue"
-	counter           = "counter"
-	gauge             = "gauge"
-	defaultCtxTimeout = servconfig.DefaultCtxTimeout // default context timeout from servconfig
+	mType   = "mtype"
+	mName   = "mname"
+	mValue  = "mvalue"
+	counter = "counter"
+	gauge   = "gauge"
 )
 
-var signKey string // secret key from servconfig
+var (
+	signKey           string                         // secret key from servconfig
+	defaultCtxTimeout = servconfig.DefaultCtxTimeout // default context timeout from servconfig
+)
 
 // MetricsHandlerPost endpoint handler "/update/{mtype}/{mname}/{mvalue}" metric update.
 // Type can take two values: "gauge" or "counter".
