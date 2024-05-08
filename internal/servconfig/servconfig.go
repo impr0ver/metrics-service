@@ -1,10 +1,14 @@
 package servconfig
 
 import (
+	"crypto/rsa"
 	"flag"
+	"log"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/impr0ver/metrics-service/internal/crypt"
 )
 
 type Config struct {
@@ -15,6 +19,8 @@ type Config struct {
 	DatabaseDSN       string
 	DefaultCtxTimeout time.Duration
 	Key               string
+	PathToPrivKey     string
+	PrivateKey        *rsa.PrivateKey
 }
 
 const (
@@ -25,6 +31,7 @@ const (
 	DefaultDSN           = "" //user=postgres password=karat911 host=localhost port=5432 dbname=metrics sslmode=disable
 	DefaultCtxTimeout    = 20 * time.Second
 	DefaultKey           = ""
+	DefaultPathToPrivKey = ""
 )
 
 func ParseParameters() Config {
@@ -37,7 +44,7 @@ func ParseParameters() Config {
 	flag.BoolVar(&cfg.Restore, "r", RestoreTrue, "Restore server metrics flag")
 	flag.StringVar(&cfg.DatabaseDSN, "d", DefaultDSN, "Source to DB")
 	flag.StringVar(&cfg.Key, "k", DefaultKey, "Secret key")
-
+	flag.StringVar(&cfg.PathToPrivKey, "crypto-key", DefaultPathToPrivKey, "Private key for asymmetric encoding")
 	flag.Parse()
 
 	if v, ok := os.LookupEnv("ADDRESS"); ok {
@@ -66,6 +73,18 @@ func ParseParameters() Config {
 
 	if v, ok := os.LookupEnv("KEY"); ok {
 		cfg.Key = v
+	}
+
+	if v, ok := os.LookupEnv("CRYPTO_KEY"); ok {
+		cfg.PathToPrivKey = v
+	}
+
+	if cfg.PathToPrivKey != "" {
+		pKey, err := crypt.InitPrivateKey(cfg.PathToPrivKey)
+		if err != nil {
+			log.Fatalf("can not init private key, %v", err)
+		}
+		cfg.PrivateKey = pKey
 	}
 
 	return cfg

@@ -1,10 +1,14 @@
 package crypt
 
 import (
+	"bytes"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+var waitInitKeys sync.WaitGroup
 
 func TestSignDataWithSHA256(t *testing.T) {
 
@@ -30,7 +34,7 @@ func TestSignDataWithSHA256(t *testing.T) {
 			} else {
 				assert.Equal(t, hash, tt.want)
 			}
-			
+
 		})
 	}
 }
@@ -53,5 +57,38 @@ func TestCheckHashSHA256(t *testing.T) {
 			res := CheckHashSHA256(tt.hash, tt.want)
 			assert.Equal(t, res, true)
 		})
+	}
+}
+
+func TestInitKeys(t *testing.T) {
+	waitInitKeys.Add(1)
+	err := GenKeys("./")
+	assert.NoError(t, err, "GenKeys() failed")
+	waitInitKeys.Done()
+}
+
+func TestEncryptPKCS1v15(t *testing.T) {
+	waitInitKeys.Wait()
+
+	pubKey, err := InitPublicKey("./public.pem")
+	assert.NoError(t, err, "InitPublicKey() failed")
+
+	privKey, err := InitPrivateKey("./private.pem")
+	assert.NoError(t, err, "InitPrivateKey() failed")
+
+	plainText := ([]byte)("GO - best courses in Yandex Praktikum!!!!!!")
+
+	cipherText, err := EncryptPKCS1v15(pubKey, plainText)
+	assert.NoError(t, err, "EncryptMsg() failed")
+	t.Logf("Encrypt success! result is: %s\n", cipherText)
+	
+	decryptText, err := DecryptPKCS1v15(privKey, cipherText)
+	assert.NoError(t, err, "DecryptMsg() failed")
+
+	value := bytes.Equal(plainText, decryptText)
+	assert.True(t, value, "DecryptMsg() failed, decripted text is not equal plain text")
+
+	if string(decryptText) != string(plainText) {
+		t.Fatalf("plainText(%s) and decrypted(%s) are not same", plainText, decryptText)
 	}
 }

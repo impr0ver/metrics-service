@@ -6,6 +6,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -457,13 +458,45 @@ func verifyDataMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func decriptDataMiddleware(privateKey *rsa.PrivateKey) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			sLogger := logger.NewLogger()
+			ct := r.Header.Get("Content-type")
+			if ct != "application/octet-stream" {
+				next.ServeHTTP(w, r)
+			}
+			ciphertext, err := io.ReadAll(r.Body)
+			if err != nil {
+				sLogger.Error("decriptMiddleware: ReadAll error, %v", err)
+				return
+			}
+			jsonbytes, err := crypt.DecryptPKCS1v15(privateKey, ciphertext)
+			if err != nil {
+				sLogger.Error("decriptMiddleware: DecryptMsg error, %v", err)
+				return
+			}
+			r.Header.Set("Content-type", "application/json; charset=utf-8")
+			r.Body.Close()
+			r.Body = io.NopCloser(bytes.NewBuffer(jsonbytes))
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // ChiRouter initializing and setting up the router.
 func ChiRouter(memStor storage.MemoryStoragerInterface, cfg *servconfig.Config) *chi.Mux {
 	r := chi.NewRouter()
 
 	signKey = cfg.Key
 
-	r.Use(verifyDataMiddleware, gzipMiddleware) // first step check virify sending data. Second step work with sending data
+	r.Use(verifyDataMiddleware) // check virify sending data
+
+	if cfg.PrivateKey != nil {
+		r.Use(decriptDataMiddleware(cfg.PrivateKey)) // decrypt data if privateKey is set (RSA with PKCS1v15)
+	}
+
+	r.Use(gzipMiddleware) // gzip/ungzip data
 
 	r.Use(middleware.Logger) // replace my custom logger on chi middleware logger
 

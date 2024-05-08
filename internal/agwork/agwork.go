@@ -2,6 +2,7 @@ package agwork
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"errors"
 	"strconv"
 	"syscall"
@@ -89,7 +90,7 @@ func SetGopsMetrics(metrics *agmemory.AgMemory, mu *sync.RWMutex) error {
 	return nil
 }
 
-func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int) {
+func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int, publicKey *rsa.PublicKey) {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -131,20 +132,34 @@ func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL strin
 	if rateLimit > 1 {
 		// worker pool
 		for w = 0; w < rateLimit-1; w++ {
-			go worker(sem, agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey)
+			go worker(sem, agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey, publicKey)
 		}
 	}
-	go worker(sem, agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey)
+	go worker(sem, agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey, publicKey)
 }
 
-func worker(sem *agconfig.Semaphore, agMetricsArray []agmemory.Metrics, fullURL string, signKey string) {
+func worker(sem *agconfig.Semaphore, agMetricsArray []agmemory.Metrics, fullURL string, signKey string, publicKey *rsa.PublicKey) {
 	sem.Acquire()       //block routine via struct{}{} literal
 	defer sem.Release() //unblock via read from chan
 
 	buff := new(bytes.Buffer)
+
 	gzip.CompressJSON(buff, agMetricsArray)
 
-	res, err := sendRequest(http.MethodPost, "application/json", fullURL, buff, signKey)
+	contentType := "application/json"
+
+	if publicKey != nil {
+		cryptBuff, err := crypt.EncryptPKCS1v15(publicKey, buff.Bytes())//cryptBuff, err := crypt.EncryptMsg(publicKey, buff.Bytes())
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		contentType = "application/octet-stream"
+		buff.Reset()
+		buff.Write(cryptBuff)
+	}
+
+	res, err := sendRequest(http.MethodPost, contentType, fullURL, buff, signKey)
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -87,7 +87,7 @@ func main() {
 				return
 			case t := <-repIntTicker.C:
 				sLogger.Infoln("Send metrics data at", t.Format("04:05"))
-				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.Address, cfg.Key, cfg.RateLimit)
+				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.Address, cfg.Key, cfg.RateLimit, /*///*/cfg.PublicKey)
 			}
 		}
 	}()

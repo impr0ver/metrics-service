@@ -1,12 +1,14 @@
 package agconfig
 
 import (
+	"crypto/rsa"
 	"flag"
 	"log"
 	"os"
 	"strconv"
 
 	"github.com/caarlos0/env/v6"
+	"github.com/impr0ver/metrics-service/internal/crypt"
 )
 
 type (
@@ -15,11 +17,13 @@ type (
 	}
 
 	Config struct {
-		Address        string `env:"ADDRESS"`
-		PollInterval   int    `env:"POLL_INTERVAL"`
-		ReportInterval int    `env:"REPORT_INTERVAL"`
-		Key            string `env:"KEY"`
-		RateLimit      int    `env:"RATE_LIMIT"`
+		Address         string `env:"ADDRESS"`
+		PollInterval    int    `env:"POLL_INTERVAL"`
+		ReportInterval  int    `env:"REPORT_INTERVAL"`
+		Key             string `env:"KEY"`
+		RateLimit       int    `env:"RATE_LIMIT"`
+		PathToPublicKey string `env:"CRYPTO_KEY"`
+		PublicKey       *rsa.PublicKey
 	}
 )
 
@@ -49,6 +53,7 @@ func InitConfig() Config {
 	flag.IntVar(&cfg.PollInterval, "p", 2, "Frequency of polling metrics from the package.")
 	flag.StringVar(&cfg.Key, "k", "", "Secret key.")
 	flag.IntVar(&cfg.RateLimit, "l", 2, "Rate limit.")
+	flag.StringVar(&cfg.PathToPublicKey, "crypto-key", "", "Public key for asymmetric encoding")
 	flag.Parse()
 
 	if envAddr := os.Getenv("ADDRESS"); envAddr != "" {
@@ -85,6 +90,18 @@ func InitConfig() Config {
 
 	if cfg.RateLimit == 0 {
 		log.Fatal("rate_limit must not be a zero")
+	}
+
+	if envCryptoKey := os.Getenv("CRYPTO_KEY"); envCryptoKey != "" {
+		cfg.PathToPublicKey = envCryptoKey
+	}
+
+	if cfg.PathToPublicKey != "" {
+		pk, err := crypt.InitPublicKey(cfg.PathToPublicKey)
+		if err != nil {
+			log.Fatalf("can not init public key, %v", err)
+		}
+		cfg.PublicKey = pk
 	}
 
 	return cfg
