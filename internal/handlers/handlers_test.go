@@ -9,9 +9,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/impr0ver/metrics-service/internal/crypt"
 	"github.com/impr0ver/metrics-service/internal/handlers"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
@@ -544,4 +547,143 @@ func BenchmarkMetricsHandlerGetJSON(b *testing.B) {
 		res := w.Result()
 		res.Body.Close()
 	}
+}
+
+func TestMiddlewareLogger(t *testing.T) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("[]"))
+	})
+
+	req := httptest.NewRequest("POST", "/value/gauge/Sys", nil)
+	rr := httptest.NewRecorder()
+
+	handler := middleware.Logger(testHandler)
+	handler.ServeHTTP(rr, req)
+}
+
+func TestVerifyDataMiddleware(t *testing.T) {
+	testJSON := `[{ "id": "MCacheSys", "type": "gauge", "value": 15600 },
+  { "id": "StackInuse", "type": "gauge", "value": 327680 },
+  { "id": "HeapInuse", "type": "gauge", "value": 811008 },
+  { "id": "CPUutilization1", "type": "gauge", "value": 1.9801980198269442 },
+  { "id": "StackSys", "type": "gauge", "value": 327680 },
+  { "id": "GCSys", "type": "gauge", "value": 8055592 },
+  { "id": "Alloc", "type": "gauge", "value": 308568 },
+  { "id": "MCacheInuse", "type": "gauge", "value": 1200 }]`
+
+	cfg.Key = "TEST"
+
+	r := handlers.ChiRouter(&memstorage, &cfg)
+
+	bodyReader := strings.NewReader(testJSON)
+
+	request := httptest.NewRequest(http.MethodPost, "/updates/", bodyReader)
+	request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	request.Header.Add("HashSHA256", "8ceb4e004a3280551772ebccf729102a88a6151d5e6c46bdf573bc56325ff765")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, request)
+
+	res := w.Result()
+	res.Body.Close()
+
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		require.NoError(t, err)
+	}
+
+	hash := res.Header.Get("HashSHA256")
+
+	assert.Equal(t, hash, "8ceb4e004a3280551772ebccf729102a88a6151d5e6c46bdf573bc56325ff765")
+	assert.Equal(t, res.StatusCode, 200)
+	assert.Equal(t, string(respBody), "Registered successfully!")
+}
+
+func TestVerifyDataMiddleware_negative(t *testing.T) {
+	testJSON := `[{ "id": "MCacheSys", "type": "gauge", "value": 15600 },
+  { "id": "StackInuse", "type": "gauge", "value": 327680 },
+  { "id": "HeapInuse", "type": "gauge", "value": 811008 },
+  { "id": "CPUutilization1", "type": "gauge", "value": 1.9801980198269442 },
+  { "id": "StackSys", "type": "gauge", "value": 327680 },
+  { "id": "GCSys", "type": "gauge", "value": 8055592 },
+  { "id": "Alloc", "type": "gauge", "value": 308568 },
+  { "id": "MCacheInuse", "type": "gauge", "value": 1200 }]`
+
+	cfg.Key = "TEST"
+
+	r := handlers.ChiRouter(&memstorage, &cfg)
+
+	bodyReader := strings.NewReader(testJSON)
+
+	request := httptest.NewRequest(http.MethodPost, "/updates/", bodyReader)
+	request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	request.Header.Add("HashSHA256", "8ceb4e004a3280551772ebccf729102a88a6151d5e6c46bdf573bc56325ff766")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, request)
+
+	res := w.Result()
+	res.Body.Close()
+
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	hash := res.Header.Get("HashSHA256")
+
+	assert.NotEqual(t, hash, "8ceb4e004a3280551772ebccf729102a88a6151d5e6c46bdf573bc56325ff766")
+	assert.Equal(t, res.StatusCode, 400)
+	assert.Equal(t, string(respBody), "")
+}
+
+func TestDecriptDataMiddleware(t *testing.T) {
+	cfg := servconfig.ParseParameters()
+	plainText := `[{ "id": "MCacheSys", "type": "gauge", "value": 15600 },
+  { "id": "StackInuse", "type": "gauge", "value": 327680 },
+  { "id": "HeapInuse", "type": "gauge", "value": 811008 },
+  { "id": "CPUutilization1", "type": "gauge", "value": 1.9801980198269442 },
+  { "id": "StackSys", "type": "gauge", "value": 327680 },
+  { "id": "GCSys", "type": "gauge", "value": 8055592 },
+  { "id": "Alloc", "type": "gauge", "value": 308568 },
+  { "id": "MCacheInuse", "type": "gauge", "value": 1200 }]`
+
+	err := crypt.GenKeys("./")
+	assert.NoError(t, err, "GenKeys() failed")
+
+	pubKey, err := crypt.InitPublicKey("./public.pem")
+	assert.NoError(t, err, "InitPublicKey() failed")
+
+	privKey, err := crypt.InitPrivateKey("./private.pem")
+	assert.NoError(t, err, "InitPrivateKey() failed")
+
+	cipherText, err := crypt.EncryptPKCS1v15(pubKey, []byte(plainText))
+	assert.NoError(t, err, "EncryptMsg() failed")
+
+	cfg.Key = ""
+	cfg.PrivateKey = privKey
+
+	r := handlers.ChiRouter(&memstorage, &cfg)
+
+	bodyReader := strings.NewReader(string(cipherText))
+
+	request := httptest.NewRequest(http.MethodPost, "/updates/", bodyReader)
+	request.Header.Set("Content-Type", "application/octet-stream")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, request)
+
+	res := w.Result()
+	res.Body.Close()
+
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		require.NoError(t, err)
+	}
+
+	assert.Equal(t, res.StatusCode, 200)
+	assert.Equal(t, string(respBody), "Registered successfully!")
+
+	os.Remove("./public.pem")
+	os.Remove("./private.pem")
 }

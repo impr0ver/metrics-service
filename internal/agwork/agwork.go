@@ -149,7 +149,7 @@ func worker(sem *agconfig.Semaphore, agMetricsArray []agmemory.Metrics, fullURL 
 	contentType := "application/json"
 
 	if publicKey != nil {
-		cryptBuff, err := crypt.EncryptPKCS1v15(publicKey, buff.Bytes())//cryptBuff, err := crypt.EncryptMsg(publicKey, buff.Bytes())
+		cryptBuff, err := crypt.EncryptPKCS1v15(publicKey, buff.Bytes())
 		if err != nil {
 			fmt.Println(err)
 			return

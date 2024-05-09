@@ -2,6 +2,7 @@ package crypt
 
 import (
 	"bytes"
+	"os"
 	"sync"
 	"testing"
 
@@ -91,4 +92,23 @@ func TestEncryptPKCS1v15(t *testing.T) {
 	if string(decryptText) != string(plainText) {
 		t.Fatalf("plainText(%s) and decrypted(%s) are not same", plainText, decryptText)
 	}
+
+	os.Remove("./public.pem")
+	os.Remove("./private.pem")
+}
+
+func TestEncryptPKCS1v15_negative(t *testing.T) {
+	waitInitKeys.Wait()
+
+	pubKey, err := InitPublicKey("./noname.pem")
+	assert.Error(t, err, "open ./noname.pem: no such file or directory")
+
+	privKey, err := InitPrivateKey("./noname2.pem")
+	assert.Error(t, err, "open ./noname2.pem: no such file or directory")
+
+	t.Logf("params: %v\n%v\n", pubKey, privKey)
+
+
+	os.Remove("./public.pem")
+	os.Remove("./private.pem")
 }

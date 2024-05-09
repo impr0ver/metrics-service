@@ -431,7 +431,7 @@ func gzipMiddleware(next http.Handler) http.Handler {
 }
 
 // verifyDataMiddleware check hash from request.
-func verifyDataMiddleware(next http.Handler) http.Handler {
+func VerifyDataMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sLogger := logger.NewLogger()
 
@@ -460,7 +460,7 @@ func verifyDataMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func decriptDataMiddleware(privateKey *rsa.PrivateKey) func(http.Handler) http.Handler {
+func DecriptDataMiddleware(privateKey *rsa.PrivateKey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			sLogger := logger.NewLogger()
@@ -492,10 +492,10 @@ func ChiRouter(memStor storage.MemoryStoragerInterface, cfg *servconfig.Config) 
 
 	signKey = cfg.Key
 
-	r.Use(verifyDataMiddleware) // check virify sending data
+	r.Use(VerifyDataMiddleware) // check virify sending data
 
 	if cfg.PrivateKey != nil {
-		r.Use(decriptDataMiddleware(cfg.PrivateKey)) // decrypt data if privateKey is set (RSA with PKCS1v15)
+		r.Use(DecriptDataMiddleware(cfg.PrivateKey)) // decrypt data if PrivateKey is set (RSA with PKCS1v15)
 	}
 
 	r.Use(gzipMiddleware) // gzip/ungzip data

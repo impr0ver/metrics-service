@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/impr0ver/metrics-service/internal/agconfig"
@@ -34,6 +38,9 @@ func main() {
 
 	var sLogger = logger.NewLogger()
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer stop()
+
 	pollIntTicker := time.NewTicker(cfg.PollInterval)
 	defer pollIntTicker.Stop()
 	pollIntGopsTicker := time.NewTicker(cfg.PollInterval)
@@ -41,17 +48,15 @@ func main() {
 	repIntTicker := time.NewTicker(cfg.ReportInterval)
 	defer repIntTicker.Stop()
 
-	donePollInt := make(chan bool)
-	doneGopPollInt := make(chan bool)
-	doneRepInt := make(chan bool)
-
 	//routine for set runtime metrics
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for {
 			select {
-			case <-donePollInt:
+			case <-ctx.Done():
+				stop()
+				sLogger.Infoln("- Set \"runtime\" metrics is shutdown...")
 				return
 			case t := <-pollIntTicker.C:
 				sLogger.Infoln("Set \"runtime\" metrics at", t.Format("04:05"))
@@ -66,7 +71,9 @@ func main() {
 		defer wg.Done()
 		for {
 			select {
-			case <-doneGopPollInt:
+			case <-ctx.Done():
+				stop()
+				sLogger.Infoln("- Set \"gops\" metrics is shutdown...")
 				return
 			case t := <-pollIntGopsTicker.C:
 				sLogger.Infoln("Set \"gops\" metrics at", t.Format("04:05"))
@@ -83,7 +90,9 @@ func main() {
 		defer wg.Done()
 		for {
 			select {
-			case <-doneRepInt:
+			case <-ctx.Done():
+				stop()
+				sLogger.Infoln("- Send metrics is shutdown...")
 				return
 			case t := <-repIntTicker.C:
 				sLogger.Infoln("Send metrics data at", t.Format("04:05"))
@@ -93,4 +102,28 @@ func main() {
 	}()
 
 	wg.Wait()
+	sLogger.Info("Quit signal received, all routines is gracefully shutdown!")
+
+	sLogger.Info("Wait for last metrics send...")
+	ctx, cancelFunc := context.WithTimeout(context.Background(), cfg.ReportInterval)
+	defer cancelFunc()
+
+	err := lastSendMetrics(ctx, &mu, &agMemory, cfg)
+	if err != nil {
+		sLogger.Info("lastSendMetrics task exited with error", err)
+	}
+
+}
+
+func lastSendMetrics(ctx context.Context, mu *sync.RWMutex, agMemory *agmemory.AgMemory, cfg agconfig.Config) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			agwork.SendMetricsJSONBatch(mu, agMemory, cfg.Address, cfg.Key, cfg.RateLimit, cfg.PublicKey)
+			time.Sleep(cfg.ReportInterval)
+			return nil
+		}
+	}
 }

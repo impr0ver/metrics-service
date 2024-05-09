@@ -65,6 +65,7 @@ func main() {
 		sLogger.Infof("Exit reason: %v \n", err)
 	}
 
+	// do some work after gracefully shutdown server
 	if ok := isNotRunningWithDB(&cfg); ok {
 		if cfg.StoreFile != "" {
 			sLogger.Info("Store metrics in file...")
