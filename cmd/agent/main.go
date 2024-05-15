@@ -48,7 +48,7 @@ func main() {
 	repIntTicker := time.NewTicker(cfg.ReportInterval)
 	defer repIntTicker.Stop()
 
-	//routine for set runtime metrics
+	//one routine for set runtime metrics
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -65,7 +65,7 @@ func main() {
 		}
 	}()
 
-	//routine for set gops metrics
+	//one routine for set gops metrics
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -85,6 +85,7 @@ func main() {
 		}
 	}()
 
+	//one routine for send metrics
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
