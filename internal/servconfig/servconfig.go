@@ -23,19 +23,21 @@ type Config struct {
 	Key               string          `json:"-"`
 	PathToPrivKey     string          `json:"crypto_key"`
 	PrivateKey        *rsa.PrivateKey `json:"-"`
+	TrustedSubnet     string          `json:"trusted_subnet"`
 }
 
 var (
-	DefaultListenAddr    = "localhost:8080"
-	DefaultStoreInterval = 300 * time.Second
-	DefaultStoreFile     = "/tmp/metrics-db.json"
-	DefaultRestoreValue  = true
-	DefaultDSN           = "" //user=postgres password=karat911 host=localhost port=5432 dbname=metrics sslmode=disable
+	defaultListenAddr    = "localhost:8080"
+	defaultStoreInterval = 300 * time.Second
+	defaultStoreFile     = "/tmp/metrics-db.json"
+	defaultRestoreValue  = true
+	defaultDSN           = "" //user=postgres password=karat911 host=localhost port=5432 dbname=metrics sslmode=disable
 	DefaultCtxTimeout    = 20 * time.Second
-	DefaultKey           = ""
-	DefaultPathToPrivKey = ""
-	DefaultPathToConfig  = ""
-	pathToConfig         = DefaultPathToConfig
+	defaultKey           = ""
+	defaultPathToPrivKey = ""
+	defaultPathToConfig  = ""
+	pathToConfig         = defaultPathToConfig
+	defaultTrustedSubnet = "0.0.0.0/0"
 )
 
 func (c *Config) UnmarshalJSON(data []byte) error {
@@ -68,22 +70,25 @@ func ParseParameters() Config {
 	tmpcfg, err := readConfigFile()
 	if err == nil {
 		if tmpcfg.ListenAddr != "" {
-			DefaultListenAddr = tmpcfg.ListenAddr
+			defaultListenAddr = tmpcfg.ListenAddr
 		}
 		if tmpcfg.StoreInterval != 0 {
-			DefaultStoreInterval = tmpcfg.StoreInterval
+			defaultStoreInterval = tmpcfg.StoreInterval
 		}
 		if tmpcfg.StoreFile != "" {
-			DefaultStoreFile = tmpcfg.StoreFile
+			defaultStoreFile = tmpcfg.StoreFile
 		}
 		if tmpcfg.DatabaseDSN != "" {
-			DefaultDSN = tmpcfg.DatabaseDSN
+			defaultDSN = tmpcfg.DatabaseDSN
 		}
-		if tmpcfg.Restore != DefaultRestoreValue {
-			DefaultRestoreValue = tmpcfg.Restore
+		if tmpcfg.Restore != defaultRestoreValue {
+			defaultRestoreValue = tmpcfg.Restore
 		}
 		if tmpcfg.PathToPrivKey != "" {
-			DefaultPathToPrivKey = tmpcfg.PathToPrivKey
+			defaultPathToPrivKey = tmpcfg.PathToPrivKey
+		}
+		if tmpcfg.TrustedSubnet != "" {
+			defaultTrustedSubnet = tmpcfg.TrustedSubnet
 		}
 	} else {
 		if err.Error() != "no config file" {
@@ -92,14 +97,15 @@ func ParseParameters() Config {
 	}
 
 	// second work with flags
-	flag.StringVar(&pathToConfig, "config", DefaultPathToConfig, "Path to config")
-	flag.StringVar(&cfg.ListenAddr, "a", DefaultListenAddr, "Server address and port")
-	flag.DurationVar(&cfg.StoreInterval, "i", DefaultStoreInterval, "Write store interval")
-	flag.StringVar(&cfg.StoreFile, "f", DefaultStoreFile, "Path to store file")
-	flag.BoolVar(&cfg.Restore, "r", DefaultRestoreValue, "Restore server metrics flag")
-	flag.StringVar(&cfg.DatabaseDSN, "d", DefaultDSN, "Source to DB")
-	flag.StringVar(&cfg.Key, "k", DefaultKey, "Secret key")
-	flag.StringVar(&cfg.PathToPrivKey, "crypto-key", DefaultPathToPrivKey, "Private key for asymmetric encoding")
+	flag.StringVar(&pathToConfig, "config", defaultPathToConfig, "Path to config")
+	flag.StringVar(&cfg.ListenAddr, "a", defaultListenAddr, "Server address and port")
+	flag.DurationVar(&cfg.StoreInterval, "i", defaultStoreInterval, "Write store interval")
+	flag.StringVar(&cfg.StoreFile, "f", defaultStoreFile, "Path to store file")
+	flag.BoolVar(&cfg.Restore, "r", defaultRestoreValue, "Restore server metrics flag")
+	flag.StringVar(&cfg.DatabaseDSN, "d", defaultDSN, "Source to DB")
+	flag.StringVar(&cfg.Key, "k", defaultKey, "Secret key")
+	flag.StringVar(&cfg.PathToPrivKey, "crypto-key", defaultPathToPrivKey, "Private key for asymmetric encoding")
+	flag.StringVar(&cfg.TrustedSubnet, "t", defaultTrustedSubnet, "trusted subnet in CIDR format")
 	flag.Parse()
 
 	// third work with env's
@@ -109,7 +115,7 @@ func ParseParameters() Config {
 	if v, ok := os.LookupEnv("STORE_INTERVAL"); ok {
 		cfg.StoreInterval, err = time.ParseDuration(v)
 		if err != nil {
-			cfg.StoreInterval = DefaultStoreInterval
+			cfg.StoreInterval = defaultStoreInterval
 		}
 	}
 	if v, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
@@ -118,7 +124,7 @@ func ParseParameters() Config {
 	if v, ok := os.LookupEnv("RESTORE"); ok {
 		cfg.Restore, err = strconv.ParseBool(v)
 		if err != nil {
-			cfg.Restore = DefaultRestoreValue
+			cfg.Restore = defaultRestoreValue
 		}
 	}
 	if v, ok := os.LookupEnv("DATABASE_DSN"); ok {
@@ -141,6 +147,10 @@ func ParseParameters() Config {
 			log.Fatalf("can not init private key, %v", err)
 		}
 		cfg.PrivateKey = pKey
+	}
+
+	if v, ok := os.LookupEnv("TRUSTED_SUBNET"); ok {
+		cfg.TrustedSubnet = v
 	}
 
 	return cfg
@@ -167,7 +177,7 @@ func readConfigFile() (Config, error) {
 		return tmpcfg, errors.New("no config file")
 	}
 
-	DefaultPathToConfig = pathToConfig
+	defaultPathToConfig = pathToConfig
 	cfgbytes, err := os.ReadFile(pathToConfig)
 
 	if err != nil {

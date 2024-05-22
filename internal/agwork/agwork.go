@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"errors"
+	"net"
 	"strconv"
 	"syscall"
 
@@ -90,7 +91,7 @@ func SetGopsMetrics(metrics *agmemory.AgMemory, mu *sync.RWMutex) error {
 	return nil
 }
 
-func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int, publicKey *rsa.PublicKey) {
+func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int, publicKey *rsa.PublicKey, realIP string) {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -132,13 +133,13 @@ func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL strin
 	if rateLimit > 1 {
 		// worker pool
 		for w = 0; w < rateLimit-1; w++ {
-			go worker(sem, agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey, publicKey)
+			go worker(sem, agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey, publicKey, realIP)
 		}
 	}
-	go worker(sem, agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey, publicKey)
+	go worker(sem, agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey, publicKey, realIP)
 }
 
-func worker(sem *agconfig.Semaphore, agMetricsArray []agmemory.Metrics, fullURL string, signKey string, publicKey *rsa.PublicKey) {
+func worker(sem *agconfig.Semaphore, agMetricsArray []agmemory.Metrics, fullURL string, signKey string, publicKey *rsa.PublicKey, realIP string) {
 	sem.Acquire()       //block routine via struct{}{} literal
 	defer sem.Release() //unblock via read from chan
 
@@ -159,7 +160,7 @@ func worker(sem *agconfig.Semaphore, agMetricsArray []agmemory.Metrics, fullURL 
 		buff.Write(cryptBuff)
 	}
 
-	res, err := sendRequest(http.MethodPost, contentType, fullURL, buff, signKey)
+	res, err := sendRequest(http.MethodPost, contentType, fullURL, buff, signKey, realIP)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -167,10 +168,14 @@ func worker(sem *agconfig.Semaphore, agMetricsArray []agmemory.Metrics, fullURL 
 	res.Body.Close()
 }
 
-func sendRequest(method, contentType, url string, body *bytes.Buffer, signKey string) (*http.Response, error) {
+func sendRequest(method, contentType, url string, body *bytes.Buffer, signKey string, realIP string) (*http.Response, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, fmt.Errorf("error new request: %w", err)
+	}
+
+	if realIP != "" {
+		req.Header.Add("X-Real-IP", realIP)
 	}
 
 	req.Header.Set("Content-Type", contentType)
@@ -236,4 +241,19 @@ func Sleep(suffix string) {
 	t, _ := time.ParseDuration(suffix)
 	fmt.Println("Try to anower resend after: ", t, ".....")
 	time.Sleep(t)
+}
+
+func GetHostIP(srvAddr string) string {
+	conn, err := net.Dial("tcp", srvAddr)
+	if err != nil {
+		fmt.Println(err)
+		return ""
+	}
+
+	ip, _, err := net.SplitHostPort(conn.LocalAddr().String())
+	if err != nil {
+		fmt.Println(err)
+		return ""
+	}
+	return ip
 }

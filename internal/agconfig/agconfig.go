@@ -27,6 +27,7 @@ type (
 		RateLimit       int            `env:"RATE_LIMIT" json:"-"`
 		PathToPublicKey string         `env:"CRYPTO_KEY" json:"crypto_key"`
 		PublicKey       *rsa.PublicKey `json:"-"`
+		RealHostIP      string         `json:"-"`
 	}
 )
 

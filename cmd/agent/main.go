@@ -33,10 +33,10 @@ func main() {
 	var agMemory = agmemory.NewAgMemory()
 	var mu sync.RWMutex
 	var wg sync.WaitGroup
+	var sLogger = logger.NewLogger()
 
 	cfg := agconfig.InitConfig()
-
-	var sLogger = logger.NewLogger()
+	cfg.RealHostIP = agwork.GetHostIP(cfg.Address)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
@@ -97,7 +97,7 @@ func main() {
 				return
 			case t := <-repIntTicker.C:
 				sLogger.Infoln("Send metrics data at", t.Format("04:05"))
-				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.Address, cfg.Key, cfg.RateLimit, cfg.PublicKey)
+				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.Address, cfg.Key, cfg.RateLimit, cfg.PublicKey, cfg.RealHostIP)
 			}
 		}
 	}()
@@ -122,7 +122,7 @@ func lastSendMetrics(ctx context.Context, mu *sync.RWMutex, agMemory *agmemory.A
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			agwork.SendMetricsJSONBatch(mu, agMemory, cfg.Address, cfg.Key, cfg.RateLimit, cfg.PublicKey)
+			agwork.SendMetricsJSONBatch(mu, agMemory, cfg.Address, cfg.Key, cfg.RateLimit, cfg.PublicKey, cfg.RealHostIP)
 			time.Sleep(cfg.ReportInterval)
 			return nil
 		}

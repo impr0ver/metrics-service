@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -464,23 +465,58 @@ func DecriptDataMiddleware(privateKey *rsa.PrivateKey) func(http.Handler) http.H
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			sLogger := logger.NewLogger()
-			ct := r.Header.Get("Content-type")
-			if ct != "application/octet-stream" {
-				next.ServeHTTP(w, r)
+
+			if privateKey != nil {
+				ct := r.Header.Get("Content-type")
+				if ct != "application/octet-stream" {
+					next.ServeHTTP(w, r)
+				}
+				ciphertext, err := io.ReadAll(r.Body)
+				if err != nil {
+					sLogger.Error("decriptMiddleware: ReadAll error, %v", err)
+					return
+				}
+				jsonbytes, err := crypt.DecryptPKCS1v15(privateKey, ciphertext)
+				if err != nil {
+					sLogger.Error("decriptMiddleware: DecryptMsg error, %v", err)
+					return
+				}
+				r.Header.Set("Content-type", "application/json; charset=utf-8")
+				r.Body.Close()
+				r.Body = io.NopCloser(bytes.NewBuffer(jsonbytes))
 			}
-			ciphertext, err := io.ReadAll(r.Body)
-			if err != nil {
-				sLogger.Error("decriptMiddleware: ReadAll error, %v", err)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func CheckIPMiddleware(trustedSubnet string) func(next http.Handler) http.Handler {
+	sLogger := logger.NewLogger()
+	_, subnet, err := net.ParseCIDR(trustedSubnet)
+	if err != nil {
+		sLogger.Panic(err)
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			realIP := r.Header.Get("X-Real-IP")
+
+			if realIP == "" {
+				ip, _, err := net.SplitHostPort(r.RemoteAddr)
+				realIP = ip
+				if err != nil {
+					sLogger.Error("checkIPMiddleware: error, %v", err)
+					return
+				}
+			}
+
+			netIP := net.ParseIP(realIP)
+
+			if !subnet.Contains(netIP) {
+				sLogger.Infof("Forbidden! Trusted subnet \"%s\" is not contains IP %s", subnet.String(), netIP.String())
+				w.WriteHeader(http.StatusForbidden)
 				return
 			}
-			jsonbytes, err := crypt.DecryptPKCS1v15(privateKey, ciphertext)
-			if err != nil {
-				sLogger.Error("decriptMiddleware: DecryptMsg error, %v", err)
-				return
-			}
-			r.Header.Set("Content-type", "application/json; charset=utf-8")
-			r.Body.Close()
-			r.Body = io.NopCloser(bytes.NewBuffer(jsonbytes))
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -492,18 +528,18 @@ func ChiRouter(memStor storage.MemoryStoragerInterface, cfg *servconfig.Config) 
 
 	signKey = cfg.Key
 
-	r.Use(VerifyDataMiddleware) // check virify sending data
-
-	if cfg.PrivateKey != nil {
-		r.Use(DecriptDataMiddleware(cfg.PrivateKey)) // decrypt data if PrivateKey is set (RSA with PKCS1v15)
-	}
-
-	r.Use(gzipMiddleware) // gzip/ungzip data
-
 	r.Use(middleware.Logger) // replace my custom logger on chi middleware logger
+	
+	// Middleware sequence:
+	// 1. Check remote IP for access;
+	// 2. Check verify sending data;
+	// 3. Decrypt data if "PrivateKey" is set (RSA with PKCS1v15);
+	// 4. Gzip/ungzip data.
+	r.Use(CheckIPMiddleware(cfg.TrustedSubnet), VerifyDataMiddleware, DecriptDataMiddleware(cfg.PrivateKey), gzipMiddleware)
 
 	r.Mount("/debug", middleware.Profiler()) // add pprof via chi
 
+	// Handlers.
 	r.Post("/update/{mtype}/{mname}/{mvalue}", MetricsHandlerPost(memStor))
 	r.Get("/value/{mtype}/{mname}", MetricsHandlerGet(memStor))
 	r.Get("/", MetricsHandlerGetAll(memStor))
