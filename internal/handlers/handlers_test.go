@@ -866,7 +866,7 @@ func TestUpdate_value(t *testing.T) {
 	defer closer()
 
 	type metricAlias struct {
-		Id    string
+		ID    string
 		Mtype proto.Metrics_MetricType
 		Delta int64
 		Value float64
@@ -882,8 +882,8 @@ func TestUpdate_value(t *testing.T) {
 		want want
 	}{
 		{"simple gauge test #1",
-			metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 666.66},
-			want{metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 666.66, Delta: 0}, ""}},
+			metricAlias{ID: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 666.66},
+			want{metricAlias{ID: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 666.66, Delta: 0}, ""}},
 	}
 
 	metricsLength := len(tests)
@@ -895,7 +895,7 @@ func TestUpdate_value(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			metricsArray[i].Mtype = proto.Metrics_GAUGE
 			metricsArray[i].Value = float64(tt.Value)
-			metricsArray[i].Id = tt.Id
+			metricsArray[i].Id = tt.ID
 
 			metrics.Metrics = append(metrics.Metrics, &metricsArray[i])
 
@@ -930,7 +930,7 @@ func TestUpdate_counter(t *testing.T) {
 	defer closer()
 
 	type metricAlias struct {
-		Id    string
+		ID    string
 		Mtype proto.Metrics_MetricType
 		Delta int64
 		Value float64
@@ -946,8 +946,8 @@ func TestUpdate_counter(t *testing.T) {
 		want want
 	}{
 		{"simple counter test #4",
-			metricAlias{Id: "MyCount", Mtype: proto.Metrics_COUNTER, Delta: 100500},
-			want{metricAlias{Id: "MyCount", Mtype: proto.Metrics_GAUGE, Value: 0, Delta: 100500}, ""}},
+			metricAlias{ID: "MyCount", Mtype: proto.Metrics_COUNTER, Delta: 100500},
+			want{metricAlias{ID: "MyCount", Mtype: proto.Metrics_GAUGE, Value: 0, Delta: 100500}, ""}},
 	}
 
 	metricsLength := len(tests)
@@ -959,7 +959,7 @@ func TestUpdate_counter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			metricsArray[i].Mtype = proto.Metrics_COUNTER
 			metricsArray[i].Delta = (int64)(tt.Delta)
-			metricsArray[i].Id = tt.Id
+			metricsArray[i].Id = tt.ID
 
 			metrics.Metrics = append(metrics.Metrics, &metricsArray[i])
 
@@ -1002,7 +1002,7 @@ func TestCryptUpdates(t *testing.T) {
 	defer closer()
 
 	type metricAlias struct {
-		Id    string
+		ID    string
 		Mtype proto.Metrics_MetricType
 		Delta int64
 		Value float64
@@ -1018,8 +1018,8 @@ func TestCryptUpdates(t *testing.T) {
 		want want
 	}{
 		{"simple gauge test #1",
-			metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 777.77},
-			want{metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 777.77, Delta: 0}, ""}},
+			metricAlias{ID: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 777.77},
+			want{metricAlias{ID: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 777.77, Delta: 0}, ""}},
 	}
 
 	metricsLength := len(tests)
@@ -1031,7 +1031,7 @@ func TestCryptUpdates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			metricsArray[i].Mtype = proto.Metrics_GAUGE
 			metricsArray[i].Value = float64(tt.Value)
-			metricsArray[i].Id = tt.Id
+			metricsArray[i].Id = tt.ID
 
 			metrics.Metrics = append(metrics.Metrics, &metricsArray[i])
 
