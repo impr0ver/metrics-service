@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,11 +18,17 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/impr0ver/metrics-service/internal/crypt"
 	"github.com/impr0ver/metrics-service/internal/handlers"
+	"github.com/impr0ver/metrics-service/internal/logger"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	proto "github.com/impr0ver/metrics-service/internal/rpc"
 )
 
 // TestGzipMiddleware test.
@@ -54,6 +62,7 @@ func TestGzipMiddleware(t *testing.T) {
 	memstorage.AddNewCounter(context.TODO(), "MyCounter", 95)
 
 	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -139,6 +148,7 @@ func TestMetricsHandlerPostJSON(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
 	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -201,6 +211,7 @@ func TestMetricsHandlerGetJSON(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
 	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
 	memstorage.UpdateGauge(context.TODO(), "Sys", 234.432)
 	memstorage.AddNewCounter(context.TODO(), "MyCounter", 555)
 
@@ -236,6 +247,7 @@ func TestMetricsHandlerGet(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
 	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
 
 	//set some metrics in our storage for unit-test
 	memstorage.AddNewCounter(context.TODO(), "TstCounter", storage.Counter(345))
@@ -290,6 +302,7 @@ func TestMetricsHandlerGetAll(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
 	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
 
 	//set some metrics in our storage for unit-test
 	memstorage.AddNewCounter(context.TODO(), "MyTstCounter", storage.Counter(100))
@@ -325,6 +338,7 @@ func TestMetricsHandlerPost(t *testing.T) {
 	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 		Counters: make(map[string]storage.Counter)}
 	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
 
 	ts := httptest.NewServer(handlers.ChiRouter(&memstorage, &cfg)) //ts := httptest.NewServer(handlers.MetricsHandlerPost(&memstorage)) !!!
 	defer ts.Close()
@@ -387,6 +401,7 @@ func TestMetricsHandlerPostBatch(t *testing.T) {
   { "id": "Alloc", "type": "gauge", "value": 308568 },
   { "id": "MCacheInuse", "type": "gauge", "value": 1200 }]`
 
+	cfg.TrustedSubnet = "0.0.0.0/0"
 	r := handlers.ChiRouter(&memstorage, &cfg)
 
 	bodyReader := strings.NewReader(testJSON)
@@ -419,6 +434,7 @@ func TestDataBasePing(t *testing.T) {
 	memStor = testDB
 
 	r := handlers.ChiRouter(memStor, &cfg)
+	cfg.TrustedSubnet = "0.0.0.0/0"
 
 	request := httptest.NewRequest(http.MethodGet, "/ping", nil)
 	request.Header.Set("Content-Type", "text/plain")
@@ -463,6 +479,7 @@ func BenchmarkMetricsHandlerPostBatch(b *testing.B) {
 		memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 			Counters: make(map[string]storage.Counter)}
 		var cfg = servconfig.Config{}
+		cfg.TrustedSubnet = "0.0.0.0/0"
 
 		r := handlers.ChiRouter(&memstorage, &cfg)
 
@@ -495,6 +512,7 @@ func BenchmarkMetricsHandlerPostJSON(b *testing.B) {
 		memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
 			Counters: make(map[string]storage.Counter)}
 		var cfg = servconfig.Config{}
+		cfg.TrustedSubnet = "0.0.0.0/0"
 
 		r := handlers.ChiRouter(&memstorage, &cfg)
 
@@ -527,6 +545,7 @@ func BenchmarkMetricsHandlerGetJSON(b *testing.B) {
 		Counters: make(map[string]storage.Counter)}
 
 	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
 
 	memstorage.UpdateGauge(ctx, "Sys", 234.432)
 
@@ -572,6 +591,7 @@ func TestVerifyDataMiddleware(t *testing.T) {
   { "id": "MCacheInuse", "type": "gauge", "value": 1200 }]`
 
 	cfg.Key = "TEST"
+	cfg.TrustedSubnet = "0.0.0.0/0"
 
 	r := handlers.ChiRouter(&memstorage, &cfg)
 
@@ -610,6 +630,7 @@ func TestVerifyDataMiddleware_negative(t *testing.T) {
   { "id": "MCacheInuse", "type": "gauge", "value": 1200 }]`
 
 	cfg.Key = "TEST"
+	cfg.TrustedSubnet = "0.0.0.0/0"
 
 	r := handlers.ChiRouter(&memstorage, &cfg)
 
@@ -639,6 +660,7 @@ func TestVerifyDataMiddleware_negative(t *testing.T) {
 
 func TestDecriptDataMiddleware(t *testing.T) {
 	cfg := servconfig.ParseParameters()
+
 	plainText := `[{ "id": "MCacheSys", "type": "gauge", "value": 15600 },
   { "id": "StackInuse", "type": "gauge", "value": 327680 },
   { "id": "HeapInuse", "type": "gauge", "value": 811008 },
@@ -662,6 +684,7 @@ func TestDecriptDataMiddleware(t *testing.T) {
 
 	cfg.Key = ""
 	cfg.PrivateKey = privKey
+	cfg.TrustedSubnet = "0.0.0.0/0"
 
 	r := handlers.ChiRouter(&memstorage, &cfg)
 
@@ -684,6 +707,358 @@ func TestDecriptDataMiddleware(t *testing.T) {
 	assert.Equal(t, res.StatusCode, 200)
 	assert.Equal(t, string(respBody), "Registered successfully!")
 
+	os.Remove("./public.pem")
+	os.Remove("./private.pem")
+}
+
+func grpcTestServer(c servconfig.Config, ms storage.MemoryStoragerInterface) (proto.MetricsExhangeClient, func()) {
+	var sLogger = logger.NewLogger()
+	buffer := 101024 * 1024
+	lis := bufconn.Listen(buffer)
+
+	// creates a gRPC server which has no service registered
+	baseServer := grpc.NewServer(grpc.ChainUnaryInterceptor(grpc.UnaryServerInterceptor(handlers.LoggingInterceptor),
+		grpc.UnaryServerInterceptor(handlers.VerifyDataInterceptor(c)),
+		grpc.UnaryServerInterceptor(handlers.DecryptDataInterceptor(c))))
+
+	// service register
+	proto.RegisterMetricsExhangeServer(baseServer, handlers.RPC{Config: c, Ms: ms})
+	//reflection.Register(baseServer)
+	go func() {
+		if err := baseServer.Serve(lis); err != nil {
+			sLogger.Fatal(err)
+		}
+	}()
+
+	conn, err := grpc.NewClient("passthrough:///",
+		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+			return lis.Dial()
+		}), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Printf("error connecting to server: %v", err)
+	}
+
+	closer := func() {
+		err := lis.Close()
+		if err != nil {
+			log.Printf("error closing listener: %v", err)
+		}
+		baseServer.Stop()
+	}
+
+	client := proto.NewMetricsExhangeClient(conn)
+
+	return client, closer
+}
+
+func TestUpdates(t *testing.T) {
+	ctx := context.Background()
+
+	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
+
+	client, closer := grpcTestServer(cfg, &memstorage)
+	defer closer()
+
+	type metricAlias struct {
+		Id    string
+		Mtype proto.Metrics_MetricType
+		Delta int64
+		Value float64
+	}
+
+	type want struct {
+		metric      metricAlias
+		statusError string
+	}
+	tests := []struct {
+		name string
+		metricAlias
+		want want
+	}{
+		{"simple gauge test #1",
+			metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 555.34},
+			want{metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 555.34, Delta: 0}, ""}},
+		{"simple gauge test #2",
+			metricAlias{Id: "Sys", Mtype: proto.Metrics_GAUGE, Value: 123.123},
+			want{metricAlias{Id: "Sys", Mtype: proto.Metrics_GAUGE, Value: 123.123, Delta: 0}, ""}},
+	}
+
+	metricsLength := len(tests) + 4
+	metricsArray := make([]proto.Metrics, metricsLength)
+	metrics := proto.MetricsArray{}
+	i := 0
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			metricsArray[i].Mtype = proto.Metrics_GAUGE
+			metricsArray[i].Value = float64(tt.Value)
+			metricsArray[i].Id = tt.Id
+
+			metrics.Metrics = append(metrics.Metrics, &metricsArray[i])
+
+			res, err := client.Updates(ctx, &metrics)
+			if err != nil {
+				t.Errorf("client.Updates error: %v", err)
+			}
+			assert.Equal(t, res.Error, tt.want.statusError)
+
+			gauge, err := memstorage.GetGaugeByKey(context.TODO(), tt.want.metric.Id)
+			if err != nil {
+				t.Errorf("memstorage error: %v", err)
+			}
+			assert.Equal(t, float64(gauge), tt.want.metric.Value)
+
+			i++
+		})
+	}
+
+	tests2 := []struct {
+		name string
+		metricAlias
+		want want
+	}{
+		{"simple counter test #3",
+			metricAlias{Id: "MyCount", Mtype: proto.Metrics_COUNTER, Delta: 100500},
+			want{metricAlias{Id: "MyCount", Mtype: proto.Metrics_GAUGE, Value: 0, Delta: 100500}, ""}},
+	}
+
+	for _, tt := range tests2 {
+		t.Run(tt.name, func(t *testing.T) {
+
+			metricsArray[i].Id = tt.Id
+			metricsArray[i].Mtype = proto.Metrics_COUNTER
+			metricsArray[i].Delta = (int64)(tt.Delta)
+
+			metrics.Metrics = append(metrics.Metrics, &metricsArray[i])
+
+			res, err := client.Updates(ctx, &metrics)
+			if err != nil {
+				t.Errorf("client.Updates error: %v", err)
+			}
+			assert.Equal(t, res.Error, tt.want.statusError)
+
+			counter, err := memstorage.GetCounterByKey(context.TODO(), tt.want.metric.Id)
+			if err != nil {
+				t.Errorf("memstorage error: %v", err)
+			}
+			assert.Equal(t, int64(counter), tt.want.metric.Delta)
+
+			i++
+		})
+	}
+
+}
+
+func TestUpdate_value(t *testing.T) {
+	ctx := context.Background()
+
+	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
+
+	client, closer := grpcTestServer(cfg, &memstorage)
+	defer closer()
+
+	type metricAlias struct {
+		Id    string
+		Mtype proto.Metrics_MetricType
+		Delta int64
+		Value float64
+	}
+
+	type want struct {
+		metric      metricAlias
+		statusError string
+	}
+	tests := []struct {
+		name string
+		metricAlias
+		want want
+	}{
+		{"simple gauge test #1",
+			metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 666.66},
+			want{metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 666.66, Delta: 0}, ""}},
+	}
+
+	metricsLength := len(tests)
+	metricsArray := make([]proto.Metrics, metricsLength)
+	metrics := proto.MetricsArray{}
+	i := 0
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			metricsArray[i].Mtype = proto.Metrics_GAUGE
+			metricsArray[i].Value = float64(tt.Value)
+			metricsArray[i].Id = tt.Id
+
+			metrics.Metrics = append(metrics.Metrics, &metricsArray[i])
+
+			res, err := client.Update(ctx, &metricsArray[i])
+			if err != nil {
+				t.Errorf("client.Update error: %v", err)
+			}
+			assert.Equal(t, res.Metric.Value, tt.want.metric.Value)
+
+			//GetValue
+			respGet, err := client.GetValue(ctx, &metricsArray[i])
+			if err != nil {
+				t.Errorf("client.GetValue error: %v", err)
+			}
+			assert.Equal(t, respGet.Value, float64(666.66))
+
+			i++
+		})
+	}
+}
+
+func TestUpdate_counter(t *testing.T) {
+	ctx := context.Background()
+
+	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
+
+	client, closer := grpcTestServer(cfg, &memstorage)
+	defer closer()
+
+	type metricAlias struct {
+		Id    string
+		Mtype proto.Metrics_MetricType
+		Delta int64
+		Value float64
+	}
+
+	type want struct {
+		metric      metricAlias
+		statusError string
+	}
+	tests := []struct {
+		name string
+		metricAlias
+		want want
+	}{
+		{"simple counter test #4",
+			metricAlias{Id: "MyCount", Mtype: proto.Metrics_COUNTER, Delta: 100500},
+			want{metricAlias{Id: "MyCount", Mtype: proto.Metrics_GAUGE, Value: 0, Delta: 100500}, ""}},
+	}
+
+	metricsLength := len(tests)
+	metricsArray := make([]proto.Metrics, metricsLength)
+	metrics := proto.MetricsArray{}
+	i := 0
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			metricsArray[i].Mtype = proto.Metrics_COUNTER
+			metricsArray[i].Delta = (int64)(tt.Delta)
+			metricsArray[i].Id = tt.Id
+
+			metrics.Metrics = append(metrics.Metrics, &metricsArray[i])
+
+			res, err := client.Update(ctx, &metricsArray[i])
+			if err != nil {
+				t.Errorf("client.Update error: %v", err)
+			}
+			assert.Equal(t, res.Metric.Delta, tt.want.metric.Delta)
+
+			//GetValue
+			respGet, err := client.GetValue(ctx, &metricsArray[i])
+			if err != nil {
+				t.Errorf("client.GetValue error: %v", err)
+			}
+			assert.Equal(t, respGet.Delta, int64(100500))
+
+			i++
+		})
+	}
+}
+
+func TestCryptUpdates(t *testing.T) {
+	ctx := context.Background()
+
+	memstorage := storage.MemoryStorage{Gauges: make(map[string]storage.Gauge),
+		Counters: make(map[string]storage.Counter)}
+
+	crypt.GenKeys("./")
+	pubKey, err := crypt.InitPublicKey("./public.pem")
+	assert.NoError(t, err, "InitPublicKey() failed")
+
+	privKey, err := crypt.InitPrivateKey("./private.pem")
+	assert.NoError(t, err, "InitPrivateKey() failed")
+
+	var cfg = servconfig.Config{}
+	cfg.TrustedSubnet = "0.0.0.0/0"
+	cfg.PrivateKey = privKey
+
+	client, closer := grpcTestServer(cfg, &memstorage)
+	defer closer()
+
+	type metricAlias struct {
+		Id    string
+		Mtype proto.Metrics_MetricType
+		Delta int64
+		Value float64
+	}
+
+	type want struct {
+		metric      metricAlias
+		statusError string
+	}
+	tests := []struct {
+		name string
+		metricAlias
+		want want
+	}{
+		{"simple gauge test #1",
+			metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 777.77},
+			want{metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 777.77, Delta: 0}, ""}},
+	}
+
+	metricsLength := len(tests)
+	metricsArray := make([]proto.Metrics, metricsLength)
+	metrics := proto.MetricsArray{}
+	i := 0
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			metricsArray[i].Mtype = proto.Metrics_GAUGE
+			metricsArray[i].Value = float64(tt.Value)
+			metricsArray[i].Id = tt.Id
+
+			metrics.Metrics = append(metrics.Metrics, &metricsArray[i])
+
+			cryptMetrics := proto.CryptMetrics{}
+			metricsBytes, _ := json.Marshal(&metrics)
+			cryptMetrics.Cryptbuff, err = crypt.EncryptPKCS1v15(pubKey, metricsBytes)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			res, err := client.CryptUpdates(ctx, &cryptMetrics)
+			if err != nil {
+				t.Errorf("client.CryptUpdates error: %v", err)
+			}
+			assert.Equal(t, res.Error, tt.want.statusError)
+
+			//GetValue
+			respGet, err := client.GetValue(ctx, &metricsArray[i])
+			if err != nil {
+				t.Errorf("client.GetValue error: %v", err)
+			}
+			assert.Equal(t, respGet.Value, float64(777.77))
+
+			i++
+		})
+	}
 	os.Remove("./public.pem")
 	os.Remove("./private.pem")
 }

@@ -37,7 +37,7 @@ var (
 	defaultPathToPrivKey = ""
 	defaultPathToConfig  = ""
 	pathToConfig         = defaultPathToConfig
-	defaultTrustedSubnet = "0.0.0.0/0"
+	defaultTrustedSubnet = "192.168.0.0/16"
 )
 
 func (c *Config) UnmarshalJSON(data []byte) error {

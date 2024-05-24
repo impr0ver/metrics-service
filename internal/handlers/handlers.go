@@ -21,12 +21,24 @@ import (
 	"github.com/impr0ver/metrics-service/internal/crypt"
 	"github.com/impr0ver/metrics-service/internal/gzip"
 	"github.com/impr0ver/metrics-service/internal/logger"
+	proto "github.com/impr0ver/metrics-service/internal/rpc"
 	"github.com/impr0ver/metrics-service/internal/servconfig"
 	"github.com/impr0ver/metrics-service/internal/storage"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	status "google.golang.org/grpc/status"
 )
+
+type RPC struct {
+	proto.UnimplementedMetricsExhangeServer
+	servconfig.Config
+	Ms storage.MemoryStoragerInterface
+}
 
 const (
 	mType   = "mtype"
@@ -40,6 +52,116 @@ var (
 	signKey           string                         // secret key from servconfig
 	defaultCtxTimeout = servconfig.DefaultCtxTimeout // default context timeout from servconfig
 )
+
+func (r RPC) Update(ctx context.Context, m *proto.Metrics) (*proto.MetricsUpdateResponse, error) {
+	res := proto.MetricsUpdateResponse{}
+
+	switch m.Mtype {
+	case proto.Metrics_GAUGE:
+		err := r.Ms.UpdateGauge(ctx, m.Id, storage.Gauge(m.Value))
+		if err != nil {
+			return &res, status.Errorf(codes.Internal, "internal error %v", err)
+		}
+	case proto.Metrics_COUNTER:
+		err := r.Ms.AddNewCounter(ctx, m.Id, storage.Counter(m.Delta))
+		if err != nil {
+			return &res, status.Errorf(codes.Internal, "internal error %v", err)
+		}
+		actual, err := r.Ms.GetCounterByKey(ctx, m.Id)
+		if err != nil {
+			return &res, status.Errorf(codes.Internal, "internal error %v", err)
+		}
+		m.Delta = (int64)(actual)
+	default:
+		return &res, status.Errorf(codes.InvalidArgument, "unknown metric type")
+	}
+
+	res.Metric = m
+	return &res, nil
+}
+
+func (r RPC) Updates(ctx context.Context, m *proto.MetricsArray) (*proto.MetricsUpdatesResponse, error) {
+	res := proto.MetricsUpdatesResponse{}
+	metricsSlice := make([]storage.Metrics, 0, 32)
+	var storageMetrics storage.Metrics
+
+	for _, metric := range m.Metrics {
+		storageMetrics.Delta = &metric.Delta
+		storageMetrics.Value = &metric.Value
+
+		if metric.Mtype == proto.Metrics_GAUGE {
+			storageMetrics.MType = "gauge"
+		} else {
+			storageMetrics.MType = "counter"
+		}
+		storageMetrics.ID = metric.Id
+		metricsSlice = append(metricsSlice, storageMetrics)
+	}
+
+	err := r.Ms.AddNewMetricsAsBatch(ctx, metricsSlice)
+	if err != nil {
+		return &res, status.Errorf(codes.Internal, "internal error %v", err)
+	}
+
+	return &res, nil
+}
+
+func (r RPC) CryptUpdates(ctx context.Context, cm *proto.CryptMetrics) (*proto.MetricsUpdatesResponse, error) {
+	res := proto.MetricsUpdatesResponse{}
+	metrics := proto.MetricsArray{}
+	metricsSlice := make([]storage.Metrics, 0, 32)
+	var storageMetrics storage.Metrics
+
+	if err := json.Unmarshal(cm.Plainbuff, &metrics); err != nil {
+		return nil, status.Errorf(codes.Internal, "can not unmarshal send data: %v", err)
+	}
+
+	for _, metric := range metrics.Metrics {
+		storageMetrics.Delta = &metric.Delta
+		storageMetrics.Value = &metric.Value
+
+		if metric.Mtype == proto.Metrics_GAUGE {
+			storageMetrics.MType = "gauge"
+		} else {
+			storageMetrics.MType = "counter"
+		}
+		storageMetrics.ID = metric.Id
+		metricsSlice = append(metricsSlice, storageMetrics)
+	}
+
+	err := r.Ms.AddNewMetricsAsBatch(ctx, metricsSlice)
+	if err != nil {
+		return &res, status.Errorf(codes.Internal, "internal error %v", err)
+	}
+
+	return &res, nil
+}
+
+func (r RPC) GetValue(ctx context.Context, m *proto.Metrics) (*proto.Metrics, error) {
+	var metric proto.Metrics
+	metric.Id = m.Id
+
+	switch m.Mtype {
+	case proto.Metrics_GAUGE:
+		v, err := r.Ms.GetGaugeByKey(ctx, m.Id)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "not found, err: %v", err)
+		}
+		metric.Value = (float64)(v)
+		metric.Mtype = proto.Metrics_GAUGE
+	case proto.Metrics_COUNTER:
+		v, err := r.Ms.GetCounterByKey(ctx, m.Id)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "not found, err: %v", err)
+		}
+		metric.Delta = (int64)(v)
+		metric.Mtype = proto.Metrics_COUNTER
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "unknown metric type")
+	}
+
+	return &metric, nil
+}
 
 // MetricsHandlerPost endpoint handler "/update/{mtype}/{mname}/{mvalue}" metric update.
 // Type can take two values: "gauge" or "counter".
@@ -505,7 +627,7 @@ func CheckIPMiddleware(trustedSubnet string) func(next http.Handler) http.Handle
 				ip, _, err := net.SplitHostPort(r.RemoteAddr)
 				realIP = ip
 				if err != nil {
-					sLogger.Error("checkIPMiddleware: error, %v", err)
+					sLogger.Errorf("checkIPMiddleware: error, %v", err)
 					return
 				}
 			}
@@ -529,7 +651,7 @@ func ChiRouter(memStor storage.MemoryStoragerInterface, cfg *servconfig.Config) 
 	signKey = cfg.Key
 
 	r.Use(middleware.Logger) // replace my custom logger on chi middleware logger
-	
+
 	// Middleware sequence:
 	// 1. Check remote IP for access;
 	// 2. Check verify sending data;
@@ -549,4 +671,51 @@ func ChiRouter(memStor storage.MemoryStoragerInterface, cfg *servconfig.Config) 
 	r.Post("/updates/", MetricsHandlerPostBatch(memStor))
 
 	return r
+}
+
+func LoggingInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	var sLogger = logger.NewLogger()
+	sLogger.Infof("Received request: %v", req)
+	resp, err := handler(ctx, req)
+	return resp, err
+}
+
+func VerifyDataInterceptor(c servconfig.Config) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+		var hash string
+
+		if c.Key != "" {
+			if md, ok := metadata.FromIncomingContext(ctx); ok {
+				values := md.Get("hashsha256")
+				if len(values) > 0 {
+					hash = values[0]
+				}
+			}
+
+			reqStr := fmt.Sprint(req)
+			resultHash, _ := crypt.SignDataWithSHA256([]byte(reqStr), c.Key)
+
+			if !crypt.CheckHashSHA256(resultHash, hash) {
+				return nil, status.Error(codes.Internal, "signature is incorrect")
+			}
+		}
+		return handler(ctx, req)
+	}
+}
+
+func DecryptDataInterceptor(c servconfig.Config) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+
+		if c.PrivateKey != nil {
+			//type assertion
+			if cryptMetrics, ok := req.(*proto.CryptMetrics); ok {
+				cryptMetrics.Plainbuff, err = crypt.DecryptPKCS1v15(c.PrivateKey, cryptMetrics.Cryptbuff)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "can not decrypt send data: %v", err)
+				}
+				return handler(ctx, req)
+			}
+		}
+		return handler(ctx, req)
+	}
 }

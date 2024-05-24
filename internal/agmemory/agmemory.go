@@ -1,11 +1,14 @@
 package agmemory
 
+import "sync"
+
 // Agent memory
 type (
 	Gauge   float64
 	Counter int64
 
 	AgMemory struct {
+		sync.RWMutex
 		RuntimeMetrics map[string]Gauge
 		PollCount      map[string]Counter
 	}
@@ -18,7 +21,7 @@ type (
 	}
 )
 
-func NewAgMemory() AgMemory {
+func NewAgMemory() *AgMemory {
 	agMemory := AgMemory{RuntimeMetrics: make(map[string]Gauge), PollCount: make(map[string]Counter)}
-	return agMemory
+	return &agMemory
 }

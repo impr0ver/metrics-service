@@ -1,7 +1,6 @@
 package agwork
 
 import (
-	"sync"
 	"testing"
 
 	"github.com/impr0ver/metrics-service/internal/agmemory"
@@ -12,9 +11,8 @@ import (
 
 func TestSetRTMetrics(t *testing.T) {
 	st := agmemory.NewAgMemory()
-	var mu sync.RWMutex
 
-	SetRTMetrics(&st, &mu)
+	SetRTMetrics(st, &st.RWMutex)
 
 	_, ok := st.RuntimeMetrics["Alloc"]
 	require.True(t, ok)
@@ -89,9 +87,8 @@ func TestSetRTMetrics(t *testing.T) {
 
 func TestSetGopsMetrics(t *testing.T) {
 	st := agmemory.NewAgMemory()
-	var mu sync.RWMutex
 
-	err := SetGopsMetrics(&st, &mu)
+	err := SetGopsMetrics(st, &st.RWMutex)
 	require.NoError(t, err)
 	_, ok := st.RuntimeMetrics["CPUutilization1"]
 	require.True(t, ok)

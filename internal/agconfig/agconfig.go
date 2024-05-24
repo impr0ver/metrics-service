@@ -28,6 +28,7 @@ type (
 		PathToPublicKey string         `env:"CRYPTO_KEY" json:"crypto_key"`
 		PublicKey       *rsa.PublicKey `json:"-"`
 		RealHostIP      string         `json:"-"`
+		GRPCAddress     string         `json:"-"`
 	}
 )
 
@@ -38,6 +39,7 @@ var (
 	DefaultKey             = ""
 	DefaultRateLimit       = 2
 	DefaultPathToPublicKey = ""
+	DefaultGRPCAddress     = ""
 	DefaultPathToConfig    = ""
 	pathToConfig           = DefaultPathToConfig
 )
@@ -119,6 +121,8 @@ func InitConfig() Config {
 	flag.StringVar(&cfg.Key, "k", DefaultKey, "Secret key.")
 	flag.IntVar(&cfg.RateLimit, "l", DefaultRateLimit, "Rate limit.")
 	flag.StringVar(&cfg.PathToPublicKey, "crypto-key", DefaultPathToPublicKey, "Public key for asymmetric encoding")
+	flag.StringVar(&cfg.GRPCAddress, "rpc", DefaultGRPCAddress, "GRPC server address")
+	
 	flag.Parse()
 
 	// third work with env's
@@ -166,6 +170,10 @@ func InitConfig() Config {
 			log.Fatalf("can not init public key, %v", err)
 		}
 		cfg.PublicKey = pk
+	}
+
+	if encGRPCAddr := os.Getenv("GRPC_ADDRESS"); encGRPCAddr != "" {
+		cfg.GRPCAddress = encGRPCAddr
 	}
 
 	return cfg

@@ -21,22 +21,21 @@ var (
 	buildCommit  = "N/A"
 )
 
-// go build -o cmd/agent/agent -ldflags="-X 'main.buildVersion=v9.19' -X 'main.buildDate=$(date +'%Y/%m/%d %H:%M:%S')'" cmd/agent/main.go
-func buildInfo() {
-	fmt.Println("Build version: ", buildVersion)
-	fmt.Println("Build date: ", buildDate)
-	fmt.Println("Build commit: ", buildCommit)
-}
-
 func main() {
 	buildInfo()
 	var agMemory = agmemory.NewAgMemory()
-	var mu sync.RWMutex
+	var sender agwork.Sender
 	var wg sync.WaitGroup
 	var sLogger = logger.NewLogger()
 
 	cfg := agconfig.InitConfig()
 	cfg.RealHostIP = agwork.GetHostIP(cfg.Address)
+	
+	if cfg.GRPCAddress != "" {
+		sender = agwork.GRPCSendMetrics{Cfg: cfg, Am: agMemory}
+	} else {
+		sender = agwork.HTTPSendMetrics{Cfg: cfg, Am: agMemory}
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
@@ -60,7 +59,7 @@ func main() {
 				return
 			case t := <-pollIntTicker.C:
 				sLogger.Infoln("Set \"runtime\" metrics at", t.Format("04:05"))
-				agwork.SetRTMetrics(&agMemory, &mu)
+				agwork.SetRTMetrics(agMemory, &agMemory.RWMutex)
 			}
 		}
 	}()
@@ -77,7 +76,7 @@ func main() {
 				return
 			case t := <-pollIntGopsTicker.C:
 				sLogger.Infoln("Set \"gops\" metrics at", t.Format("04:05"))
-				err := agwork.SetGopsMetrics(&agMemory, &mu)
+				err := agwork.SetGopsMetrics(agMemory, &agMemory.RWMutex)
 				if err != nil {
 					sLogger.Errorf("error in set gops metrics, %v", err)
 				}
@@ -97,7 +96,7 @@ func main() {
 				return
 			case t := <-repIntTicker.C:
 				sLogger.Infoln("Send metrics data at", t.Format("04:05"))
-				agwork.SendMetricsJSONBatch(&mu, &agMemory, cfg.Address, cfg.Key, cfg.RateLimit, cfg.PublicKey, cfg.RealHostIP)
+				sender.SendMetricsJSONBatch()
 			}
 		}
 	}()
@@ -109,22 +108,29 @@ func main() {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), cfg.ReportInterval)
 	defer cancelFunc()
 
-	err := lastSendMetrics(ctx, &mu, &agMemory, cfg)
+	err := lastSendMetrics(ctx, sender, cfg)
 	if err != nil {
 		sLogger.Info("lastSendMetrics task exited with error", err)
 	}
 
 }
 
-func lastSendMetrics(ctx context.Context, mu *sync.RWMutex, agMemory *agmemory.AgMemory, cfg agconfig.Config) error {
+func lastSendMetrics(ctx context.Context, sender agwork.Sender, cfg agconfig.Config) error {
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			agwork.SendMetricsJSONBatch(mu, agMemory, cfg.Address, cfg.Key, cfg.RateLimit, cfg.PublicKey, cfg.RealHostIP)
+			sender.SendMetricsJSONBatch()
 			time.Sleep(cfg.ReportInterval)
 			return nil
 		}
 	}
+}
+
+// go build -o cmd/agent/agent -ldflags="-X 'main.buildVersion=v9.19' -X 'main.buildDate=$(date +'%Y/%m/%d %H:%M:%S')'" cmd/agent/main.go
+func buildInfo() {
+	fmt.Println("Build version: ", buildVersion)
+	fmt.Println("Build date: ", buildDate)
+	fmt.Println("Build commit: ", buildCommit)
 }

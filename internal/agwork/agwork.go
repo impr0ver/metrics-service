@@ -2,7 +2,9 @@ package agwork
 
 import (
 	"bytes"
+	"context"
 	"crypto/rsa"
+	"encoding/json"
 	"errors"
 	"net"
 	"strconv"
@@ -19,9 +21,29 @@ import (
 	"github.com/impr0ver/metrics-service/internal/agmemory"
 	"github.com/impr0ver/metrics-service/internal/crypt"
 	"github.com/impr0ver/metrics-service/internal/gzip"
+	proto "github.com/impr0ver/metrics-service/internal/rpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
+)
+
+type (
+	Sender interface {
+		SendMetricsJSONBatch()
+	}
+
+	HTTPSendMetrics struct {
+		Cfg agconfig.Config
+		Am  *agmemory.AgMemory
+	}
+
+	GRPCSendMetrics struct {
+		Cfg agconfig.Config
+		Am  *agmemory.AgMemory
+	}
 )
 
 func SetRTMetrics(metrics *agmemory.AgMemory, mu *sync.RWMutex) {
@@ -91,18 +113,136 @@ func SetGopsMetrics(metrics *agmemory.AgMemory, mu *sync.RWMutex) error {
 	return nil
 }
 
-func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL string, signKey string, rateLimit int, publicKey *rsa.PublicKey, realIP string) {
-	mu.RLock()
-	defer mu.RUnlock()
+func (hs GRPCSendMetrics) SendMetricsJSONBatch() {
+	// init semaphore with RATE_LIMIT
+	sem := agconfig.NewSemaphore(hs.Cfg.RateLimit)
+
+	hs.Am.RLock()
+	metricsLength := len(hs.Am.RuntimeMetrics) + 1 // + 1 counter, PollCount
+	metricsArray := make([]proto.Metrics, metricsLength)
+	i := 0
+
+	for k, v := range hs.Am.RuntimeMetrics {
+		metricsArray[i].Mtype = proto.Metrics_GAUGE
+		metricsArray[i].Value = float64(v)
+		metricsArray[i].Id = k
+		i++
+	}
+
+	metricsArray[i].Id = "PollCount"
+	metricsArray[i].Mtype = proto.Metrics_COUNTER
+	metricsArray[i].Delta = (int64)(hs.Am.PollCount["PollCount"])
+	hs.Am.RUnlock()
+
+	gRPCWorker := func(sem *agconfig.Semaphore, start int, step int) {
+		sem.Acquire()       //block routine via struct{}{} literal
+		defer sem.Release() //unblock via read from chan
+
+		end := start + step
+		if end > metricsLength {
+			end = metricsLength
+		}
+
+		metrics := proto.MetricsArray{}
+		metrics.Metrics = make([]*proto.Metrics, 0, end-start)
+		for i := start; i < end; i++ {
+			metrics.Metrics = append(metrics.Metrics, &metricsArray[i])
+		}
+
+		// grpc.Dial is DEPRECATED, need to use grpc.NewClient!
+		conn, err := grpc.NewClient("passthrough:///"+hs.Cfg.GRPCAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		defer conn.Close()
+
+		cli := proto.NewMetricsExhangeClient(conn)
+
+		parent := context.Background()
+
+		if hs.Cfg.PublicKey != nil {
+			cryptMetrics := proto.CryptMetrics{}
+
+			metricsBytes, _ := json.Marshal(&metrics)
+
+			cryptMetrics.Cryptbuff, err = crypt.EncryptPKCS1v15(hs.Cfg.PublicKey, metricsBytes)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			// Add in metadata hash if cfg.Key is set
+			hash, err := crypt.SignDataWithSHA256([]byte(cryptMetrics.String()), hs.Cfg.Key)
+			if err == nil {
+				md := metadata.New(map[string]string{"hashsha256": hash})
+				parent = metadata.NewOutgoingContext(context.Background(), md)
+			}
+
+			ctx, cancel := context.WithTimeout(parent, time.Second)
+			defer cancel()
+
+			// MetricsUpdatesResponse
+			respUpdates, err := cli.CryptUpdates(ctx, &cryptMetrics)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			if respUpdates.Error == "" {
+				fmt.Println("gRPC response: Successfully updated!")
+			} else {
+				fmt.Println(respUpdates.Error)
+			}
+		} else { // Work with plain data
+
+			// Add in metadata hash if cfg.Key is set
+			hash, err := crypt.SignDataWithSHA256([]byte(metrics.String()), hs.Cfg.Key)
+			if err == nil {
+				md := metadata.New(map[string]string{"hashsha256": hash})
+				parent = metadata.NewOutgoingContext(context.Background(), md)
+			}
+
+			ctx, cancel := context.WithTimeout(parent, time.Second)
+			defer cancel()
+
+			// MetricsUpdatesResponse
+			respUpdates, err := cli.Updates(ctx, &metrics)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			if respUpdates.Error == "" {
+				fmt.Println("gRPC response: Successfully updated!")
+			} else {
+				fmt.Println(respUpdates.Error)
+			}
+		}
+	}
+
+	limit := hs.Cfg.RateLimit
+	if metricsLength < limit {
+		limit = metricsLength
+	}
+	step := (metricsLength / limit) + (metricsLength % 2)
+
+	for w := 0; w < limit; w += 1 {
+		go gRPCWorker(sem, w*step, step)
+	}
+}
+
+func (hs HTTPSendMetrics) SendMetricsJSONBatch() {
+	hs.Am.RLock()
+	defer hs.Am.RUnlock()
 
 	// init semaphore with RATE_LIMIT
-	sem := agconfig.NewSemaphore(rateLimit)
+	sem := agconfig.NewSemaphore(hs.Cfg.RateLimit)
 
-	metricData := memory.RuntimeMetrics
-	pollCount := memory.PollCount["PollCount"]
+	metricData := hs.Am.RuntimeMetrics
+	pollCount := hs.Am.PollCount["PollCount"]
 
-	fullURL := fmt.Sprintf("http://%s/updates/", URL)
+	fullURL := fmt.Sprintf("http://%s/updates/", hs.Cfg.Address)
 	var agMetrics agmemory.Metrics
+
 	agMetricsArray := make([]agmemory.Metrics, 0)
 
 	// prepare gauges metrics
@@ -124,19 +264,19 @@ func SendMetricsJSONBatch(mu *sync.RWMutex, memory *agmemory.AgMemory, URL strin
 
 	// some checks
 	agMetricsLenght := len(agMetricsArray)
-	if agMetricsLenght < rateLimit {
-		rateLimit = agMetricsLenght
+	if agMetricsLenght < hs.Cfg.RateLimit {
+		hs.Cfg.RateLimit = agMetricsLenght
 	}
-	chunk := agMetricsLenght / rateLimit
+	chunk := agMetricsLenght / hs.Cfg.RateLimit
 
 	w := 0
-	if rateLimit > 1 {
+	if hs.Cfg.RateLimit > 1 {
 		// worker pool
-		for w = 0; w < rateLimit-1; w++ {
-			go worker(sem, agMetricsArray[w*chunk:(w+1)*chunk], fullURL, signKey, publicKey, realIP)
+		for w = 0; w < hs.Cfg.RateLimit-1; w++ {
+			go worker(sem, agMetricsArray[w*chunk:(w+1)*chunk], fullURL, hs.Cfg.Key, hs.Cfg.PublicKey, hs.Cfg.RealHostIP)
 		}
 	}
-	go worker(sem, agMetricsArray[w*chunk:agMetricsLenght], fullURL, signKey, publicKey, realIP)
+	go worker(sem, agMetricsArray[w*chunk:agMetricsLenght], fullURL, hs.Cfg.Key, hs.Cfg.PublicKey, hs.Cfg.RealHostIP)
 }
 
 func worker(sem *agconfig.Semaphore, agMetricsArray []agmemory.Metrics, fullURL string, signKey string, publicKey *rsa.PublicKey, realIP string) {

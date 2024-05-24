@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+//import "google/protobuf/empty.proto";
+
+package rpc;
+option go_package = "rpc/proto";
+
+message Metrics {  
+  enum MetricType {
+    UNSPECIFIED = 0;
+    GAUGE = 1;
+    COUNTER = 2;
+  }
+  string id = 1;
+  MetricType mtype = 2;
+  int64 delta = 3; 
+  double value = 4;
+}
+
+message CryptMetrics {
+  bytes cryptbuff = 1;
+  bytes plainbuff = 2;    
+}
+
+message MetricsArray {
+  repeated Metrics metrics = 1;
+}
+
+message MetricsUpdateResponse {
+  Metrics metric = 1;
+}
+
+message MetricsUpdatesResponse {
+  string error = 1;
+}
+
+service MetricsExhange {
+  rpc Update(Metrics) returns (MetricsUpdateResponse);
+  rpc Updates(MetricsArray) returns (MetricsUpdatesResponse);
+  rpc GetValue(Metrics) returns (Metrics);
+  rpc CryptUpdates(CryptMetrics) returns (MetricsUpdatesResponse);
+}
