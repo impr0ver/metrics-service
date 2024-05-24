@@ -764,7 +764,7 @@ func TestUpdates(t *testing.T) {
 	defer closer()
 
 	type metricAlias struct {
-		Id    string
+		ID    string
 		Mtype proto.Metrics_MetricType
 		Delta int64
 		Value float64
@@ -780,11 +780,11 @@ func TestUpdates(t *testing.T) {
 		want want
 	}{
 		{"simple gauge test #1",
-			metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 555.34},
-			want{metricAlias{Id: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 555.34, Delta: 0}, ""}},
+			metricAlias{ID: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 555.34},
+			want{metricAlias{ID: "Alloc", Mtype: proto.Metrics_GAUGE, Value: 555.34, Delta: 0}, ""}},
 		{"simple gauge test #2",
-			metricAlias{Id: "Sys", Mtype: proto.Metrics_GAUGE, Value: 123.123},
-			want{metricAlias{Id: "Sys", Mtype: proto.Metrics_GAUGE, Value: 123.123, Delta: 0}, ""}},
+			metricAlias{ID: "Sys", Mtype: proto.Metrics_GAUGE, Value: 123.123},
+			want{metricAlias{ID: "Sys", Mtype: proto.Metrics_GAUGE, Value: 123.123, Delta: 0}, ""}},
 	}
 
 	metricsLength := len(tests) + 4
@@ -796,7 +796,7 @@ func TestUpdates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			metricsArray[i].Mtype = proto.Metrics_GAUGE
 			metricsArray[i].Value = float64(tt.Value)
-			metricsArray[i].Id = tt.Id
+			metricsArray[i].Id = tt.ID
 
 			metrics.Metrics = append(metrics.Metrics, &metricsArray[i])
 
@@ -806,7 +806,7 @@ func TestUpdates(t *testing.T) {
 			}
 			assert.Equal(t, res.Error, tt.want.statusError)
 
-			gauge, err := memstorage.GetGaugeByKey(context.TODO(), tt.want.metric.Id)
+			gauge, err := memstorage.GetGaugeByKey(context.TODO(), tt.want.metric.ID)
 			if err != nil {
 				t.Errorf("memstorage error: %v", err)
 			}
@@ -822,14 +822,14 @@ func TestUpdates(t *testing.T) {
 		want want
 	}{
 		{"simple counter test #3",
-			metricAlias{Id: "MyCount", Mtype: proto.Metrics_COUNTER, Delta: 100500},
-			want{metricAlias{Id: "MyCount", Mtype: proto.Metrics_GAUGE, Value: 0, Delta: 100500}, ""}},
+			metricAlias{ID: "MyCount", Mtype: proto.Metrics_COUNTER, Delta: 100500},
+			want{metricAlias{ID: "MyCount", Mtype: proto.Metrics_GAUGE, Value: 0, Delta: 100500}, ""}},
 	}
 
 	for _, tt := range tests2 {
 		t.Run(tt.name, func(t *testing.T) {
 
-			metricsArray[i].Id = tt.Id
+			metricsArray[i].Id = tt.ID
 			metricsArray[i].Mtype = proto.Metrics_COUNTER
 			metricsArray[i].Delta = (int64)(tt.Delta)
 
@@ -841,7 +841,7 @@ func TestUpdates(t *testing.T) {
 			}
 			assert.Equal(t, res.Error, tt.want.statusError)
 
-			counter, err := memstorage.GetCounterByKey(context.TODO(), tt.want.metric.Id)
+			counter, err := memstorage.GetCounterByKey(context.TODO(), tt.want.metric.ID)
 			if err != nil {
 				t.Errorf("memstorage error: %v", err)
 			}
