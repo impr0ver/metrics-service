@@ -675,13 +675,13 @@ func ChiRouter(memStor storage.MemoryStoragerInterface, cfg *servconfig.Config) 
 
 func LoggingInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	var sLogger = logger.NewLogger()
-	sLogger.Infof("Received request: %v", req)
+	sLogger.Infof("FullMethod: %s, Received request: %v", info.FullMethod, req)
 	resp, err := handler(ctx, req)
 	return resp, err
 }
 
 func VerifyDataInterceptor(c servconfig.Config) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	return func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		var hash string
 
 		if c.Key != "" {
@@ -704,7 +704,7 @@ func VerifyDataInterceptor(c servconfig.Config) grpc.UnaryServerInterceptor {
 }
 
 func DecryptDataInterceptor(c servconfig.Config) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	return func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 
 		if c.PrivateKey != nil {
 			//type assertion

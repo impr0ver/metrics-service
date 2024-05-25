@@ -24,6 +24,7 @@ var (
 func main() {
 	buildInfo()
 	var agMemory = agmemory.NewAgMemory()
+	var mu sync.RWMutex
 	var sender agwork.Sender
 	var wg sync.WaitGroup
 	var sLogger = logger.NewLogger()
@@ -32,9 +33,9 @@ func main() {
 	cfg.RealHostIP = agwork.GetHostIP(cfg.Address)
 	
 	if cfg.GRPCAddress != "" {
-		sender = agwork.GRPCSendMetrics{Cfg: cfg, Am: agMemory}
+		sender = agwork.GRPCSendMetrics{Cfg: cfg, Am: &agMemory, Mu: &mu}
 	} else {
-		sender = agwork.HTTPSendMetrics{Cfg: cfg, Am: agMemory}
+		sender = agwork.HTTPSendMetrics{Cfg: cfg, Am: &agMemory, Mu: &mu}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -59,7 +60,7 @@ func main() {
 				return
 			case t := <-pollIntTicker.C:
 				sLogger.Infoln("Set \"runtime\" metrics at", t.Format("04:05"))
-				agwork.SetRTMetrics(agMemory, &agMemory.RWMutex)
+				agwork.SetRTMetrics(&agMemory, &mu)
 			}
 		}
 	}()
@@ -76,7 +77,7 @@ func main() {
 				return
 			case t := <-pollIntGopsTicker.C:
 				sLogger.Infoln("Set \"gops\" metrics at", t.Format("04:05"))
-				err := agwork.SetGopsMetrics(agMemory, &agMemory.RWMutex)
+				err := agwork.SetGopsMetrics(&agMemory, &mu)
 				if err != nil {
 					sLogger.Errorf("error in set gops metrics, %v", err)
 				}

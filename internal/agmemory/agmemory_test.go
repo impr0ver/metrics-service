@@ -1,6 +1,7 @@
 package agmemory_test
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/impr0ver/metrics-service/internal/agmemory"
@@ -10,8 +11,9 @@ import (
 
 func TestSetGopsMetrics(t *testing.T) {
 	st := agmemory.NewAgMemory()
+	var mu sync.RWMutex
 
-	err := agwork.SetGopsMetrics(st, &st.RWMutex)
+	err := agwork.SetGopsMetrics(&st, &mu)
 	require.NoError(t, err)
 	_, ok := st.RuntimeMetrics["CPUutilization1"]
 	require.True(t, ok)
