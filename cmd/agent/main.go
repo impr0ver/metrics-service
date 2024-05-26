@@ -33,9 +33,9 @@ func main() {
 	cfg.RealHostIP = agwork.GetHostIP(cfg.Address)
 	
 	if cfg.GRPCAddress != "" {
-		sender = agwork.GRPCSendMetrics{Cfg: cfg, Am: &agMemory, Mu: &mu}
+		sender = agwork.GRPCSendMetrics{Cfg: cfg, Am: &agMemory}
 	} else {
-		sender = agwork.HTTPSendMetrics{Cfg: cfg, Am: &agMemory, Mu: &mu}
+		sender = agwork.HTTPSendMetrics{Cfg: cfg, Am: &agMemory}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
