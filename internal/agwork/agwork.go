@@ -38,11 +38,13 @@ type (
 	HTTPSendMetrics struct {
 		Cfg agconfig.Config
 		Am  *agmemory.AgMemory
+		Mu  *sync.RWMutex
 	}
 
 	GRPCSendMetrics struct {
 		Cfg agconfig.Config
 		Am  *agmemory.AgMemory
+		Mu  *sync.RWMutex
 	}
 )
 
@@ -117,8 +119,7 @@ func (hs GRPCSendMetrics) SendMetricsJSONBatch() {
 	// init semaphore with RATE_LIMIT
 	sem := agconfig.NewSemaphore(hs.Cfg.RateLimit)
 
-	var mu sync.RWMutex
-	mu.RLock()
+	hs.Mu.RLock()
 	metricsLength := len(hs.Am.RuntimeMetrics) + 1 // + 1 counter, PollCount
 	metricsArray := make([]proto.Metrics, metricsLength)
 	i := 0
@@ -133,7 +134,7 @@ func (hs GRPCSendMetrics) SendMetricsJSONBatch() {
 	metricsArray[i].Id = "PollCount"
 	metricsArray[i].Mtype = proto.Metrics_COUNTER
 	metricsArray[i].Delta = (int64)(hs.Am.PollCount["PollCount"])
-	mu.RUnlock()
+	hs.Mu.RUnlock()
 
 	gRPCWorker := func(sem *agconfig.Semaphore, start int, step int) {
 		sem.Acquire()       //block routine via struct{}{} literal
@@ -232,9 +233,8 @@ func (hs GRPCSendMetrics) SendMetricsJSONBatch() {
 }
 
 func (hs HTTPSendMetrics) SendMetricsJSONBatch() {
-	var mu sync.RWMutex
-	mu.RLock()
-	defer mu.RUnlock()
+	hs.Mu.RLock()
+	defer hs.Mu.RUnlock()
 
 	// init semaphore with RATE_LIMIT
 	sem := agconfig.NewSemaphore(hs.Cfg.RateLimit)
